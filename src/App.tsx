@@ -1,20 +1,73 @@
-import { useState } from "react";
-// import reactLogo from "./assets/react.svg";
-import { invoke } from "@tauri-apps/api/core";
+import { useEffect, useRef, useState } from 'react';
+import { EventBus } from './core/event-bus';
+import { CommandRegistry } from './core/command-registry';
+import { ViewRegistry } from './core/view-registry';
+import { MenuRegistry } from './core/menu-registry';
+import { SettingsRegistry } from './core/settings-registry';
+import { PluginManager } from './core/plugin-manager';
+import { registerBuiltinPlugins } from './plugins/index';
+import { AppShell } from './shell/AppShell';
+
+// ── Singleton registries ────────────────────────────────────────────────────
+// Created once at module load time so they survive React re-renders.
+
+const eventBus = new EventBus();
+const commandRegistry = new CommandRegistry();
+const viewRegistry = new ViewRegistry();
+const menuRegistry = new MenuRegistry();
+const settingsRegistry = new SettingsRegistry();
+
+const pluginManager = new PluginManager({
+    commands: commandRegistry,
+    views: viewRegistry,
+    menus: menuRegistry,
+    settings: settingsRegistry,
+    eventBus,
+});
+
+// Register all built-in plugins (does not activate them yet)
+registerBuiltinPlugins(pluginManager);
+
+// ── App component ────────────────────────────────────────────────────────────
 
 function App() {
-  const [greetMsg, setGreetMsg] = useState("");
-  const [name, setName] = useState("");
+    const [ready, setReady] = useState(false);
+    const activatedRef = useRef(false);
 
-  async function greet() {
-    setGreetMsg(await invoke("greet", { name }));
-  }
+    useEffect(() => {
+        if (activatedRef.current) return;
+        activatedRef.current = true;
 
-  return (
-    <div className="text-3xl font-bold text-purple-600 p-6 bg-gray-100 dark:bg-gray-900">
-      Tailwind v4 is working! 🎉
-    </div>
-  );
+        // Activate all onStartup plugins, then show the shell
+        pluginManager
+            .activateAll()
+            .then(() => setReady(true))
+            .catch((e: unknown) => {
+                console.error('[App] Error activating plugins:', e);
+                setReady(true); // Show shell even if some plugins failed
+            });
+    }, []);
+
+    if (!ready) {
+        return (
+            <div className="flex items-center justify-center h-screen w-screen bg-gray-900">
+                <div className="flex flex-col items-center gap-3 text-gray-400">
+                    <div className="w-6 h-6 border-2 border-purple-500 border-t-transparent rounded-full animate-spin" />
+                    <span className="text-sm">Loading plugins…</span>
+                </div>
+            </div>
+        );
+    }
+
+    return (
+        <AppShell
+            pluginManager={pluginManager}
+            commandRegistry={commandRegistry}
+            viewRegistry={viewRegistry}
+            menuRegistry={menuRegistry}
+            eventBus={eventBus}
+        />
+    );
 }
 
 export default App;

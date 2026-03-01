@@ -1,5 +1,17 @@
 import type React from 'react';
 
+export interface ViewMeta {
+  id: string;                 // 唯一 ID，如 "welcome.main"
+  title: string;               // 显示标题
+  plugin_id: string;          // 归属插件 ID
+  component_path: string;     // 前端组件路径标识 (如 "plugin-id/views/Name")
+  props: Record<string, any>; // 传递给组件的初始参数
+}
+
+export interface CommandMeta {
+
+}
+
 // ─── Disposable ────────────────────────────────────────────────────────────────
 export interface Disposable {
   dispose(): void;
@@ -56,6 +68,8 @@ export interface PluginManifest {
     menus?: MenuContribution[];
     settings?: SettingContribution[];
   };
+  views?: ViewMeta[];
+  commands?: CommandMeta[];
 }
 
 // ─── Plugin API (surface exposed to each plugin) ──────────────────────────────

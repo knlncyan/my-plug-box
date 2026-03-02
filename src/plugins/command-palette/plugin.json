@@ -2,17 +2,42 @@
   "id": "builtin.command-palette",
   "name": "Command Palette",
   "version": "1.0.0",
-  "description": "Registers the Show All Commands command",
-  "main": "./index.ts",
-  "activationEvents": ["onStartup"],
-  "contributes": {
-    "commands": [
-      {
-        "id": "workbench.openCommandPalette",
-        "title": "Show All Commands",
-        "category": "View",
-        "keybinding": "ctrl+shift+p"
-      }
-    ]
-  }
+  "description": "Built-in command palette plugin that lists and runs all commands",
+  "activationEvents": [
+    "onStartup",
+    "onCommand:commandPalette.open",
+    "onCommand:*",
+    "onView:commandPalette.main",
+    "onView:*"
+  ],
+  "views": [
+    {
+      "id": "commandPalette.main",
+      "title": "Command Palette",
+      "component_path": "builtin.command-palette/views/CommandPaletteView",
+      "props": {}
+    }
+  ],
+  "commands": [
+    {
+      "id": "commandPalette.open",
+      "description": "Open command palette view",
+      "expose": true
+    },
+    {
+      "id": "commandPalette.openWelcomeViaCommand",
+      "description": "Open welcome via cross-plugin command execution",
+      "expose": true
+    },
+    {
+      "id": "commandPalette.explainHooks",
+      "description": "Print activation hook explanations",
+      "expose": true
+    },
+    {
+      "id": "commandPalette.toggleVerbose",
+      "description": "Toggle command-palette verbose setting",
+      "expose": true
+    }
+  ]
 }

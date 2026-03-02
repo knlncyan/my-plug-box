@@ -1,153 +1,133 @@
-# Tauri + React + Typescript
+# plug-box
 
-This template should help get you started developing with Tauri, React and Typescript in Vite.
+A plugin-driven desktop app based on Tauri + React + TypeScript.
 
-## Recommended IDE Setup
+## Current Architecture
 
-- [VS Code](https://code.visualstudio.com/) + [Tauri](https://marketplace.visualstudio.com/items?itemName=tauri-apps.tauri-vscode) + [rust-analyzer](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer)
+- Rust backend is the source of truth for plugin metadata and lifecycle status.
+- Frontend runtime is responsible for:
+1. registering built-in plugin metadata,
+2. activation by strategy (`onStartup`, `onCommand:*`, `onView:*`),
+3. command execution dispatch,
+4. rendering plugin views,
+5. providing PluginHostAPI for plugin modules.
 
-## 目录结构
+## Tech Stack
 
+- Frontend: React 19, TypeScript, Vite
+- Backend: Tauri 2, Rust
+- Bridge: Tauri `invoke` + event `listen`
+
+## Docs
+
+- plugin.json 配置文档（中文）：`docs/plugin-json.zh-CN.md`
+
+## Project Structure
+
+```text
 src/
-├── core/                        # 插件系统核心
-│   ├── types.ts                 # 所有核心接口定义
-│   ├── disposable.ts            # Disposable 资源清理模式
-│   ├── event-bus.ts             # 全局事件总线
-│   ├── command-registry.ts      # 命令注册中心
-│   ├── view-registry.ts         # 视图/面板注册中心
-│   ├── menu-registry.ts         # 菜单贡献注册中心
-│   ├── settings-registry.ts     # 设置注册中心
-│   ├── plugin-api-factory.ts    # 为每个插件构建隔离的 API 实例
-│   ├── plugin-bridge.ts         # iframe <-> host 消息桥
-│   ├── plugin-manager.ts        # 插件生命周期管理
-│   └── index.ts                 # 统一导出
-│
-├── shell/                       # 应用 Shell UI（完全由插件贡献驱动）
-│   ├── AppShell.tsx             # 顶层布局
-│   ├── MenuBar.tsx              # 菜单栏（MenuRegistry 驱动）
-│   ├── Sidebar.tsx              # 侧边栏（ViewRegistry sidebar 驱动）
-│   ├── MainArea.tsx             # 主内容区（ViewRegistry main 驱动）
-│   ├── CommandPalette.tsx       # 命令面板 UI
-│   └── PluginViewHost.tsx       # 渲染插件 View（iframe 或 React 组件）
-│
-├── sandbox/                     # 外部插件沙箱
-│   ├── sandbox.html             # iframe 宿主页面
-│   └── sandbox-api.ts           # 在 iframe 内注入的 API 代理
-│
-├── plugins/                     # 内置插件
-│   ├── index.ts                 # 内置插件注册表（编译时）
-│   ├── welcome/                 # 示例：欢迎页面插件
-│   │   ├── plugin.json
-│   │   ├── index.ts
-│   │   └── WelcomeView.tsx
-│   └── command-palette/         # 命令面板插件（注册 Ctrl+Shift+P 命令）
-│       ├── plugin.json
-│       └── index.ts
-│
-├── App.tsx                      # 入口：初始化插件系统后渲染 AppShell
-└── main.tsx
+  App.tsx
+  main.tsx
+  pages/
+    Layout.tsx
+  shell/
+    PluginRenderer.tsx
+  core/
+    plugin-protocol.ts
+    pluginBackend.service.ts
+    plugin-runtime.ts
+    use-plugin-runtime.ts
+  plugins/
+    index.ts
+    welcome/
+      plugin.json
+      index.ts
+      views/
+        WelcomeView.tsx
+    command-palette/
+      plugin.json
+      index.ts
+      views/
+        CommandPaletteView.tsx
 
-## 关键特性
-特性	         实现方式
-内置插件	     TypeScript 模块，直接访问注册表 API
-外部插件	     PluginBridge — iframe + MessageChannel 沙箱
-资源清理	     DisposableStore — deactivate 时自动清理所有注册
-命令面板	     Ctrl+Shift+P，支持按名称/分类筛选，键盘导航
-视图标签页	     MainArea 管理主区域标签；view.focus 事件可编程切换
-设置命名空间	 插件调用 settings.get('foo') → 实际存储为 pluginId.foo
+src-tauri/
+  src/core/
+  src/commands/
+```
 
-## 各模块职责
-### event-bus.ts
-简单的 EventEmitter，支持 on/off/emit
+## PluginHostAPI (Implemented)
 
-返回 Disposable 便于取消订阅
+Plugin module `activate/deactivate` and command handlers now receive a standard API surface:
 
-全局单例
+- `commands.execute(commandId, ...args)`
+- `views.activate(viewId)`
+- `events.emit(event, payload)` / `events.on(event, handler)`
+- `settings.get/set/onChange` (plugin-id namespaced)
+- `storage.get/set` (plugin-id isolated local storage)
 
-### command-registry.ts
-register(id, handler) → Disposable
+This enables plugin isolation while still allowing collaboration through exposed commands.
 
-execute(id, ...args) → Promise
+## Command Execution Chain
 
-getAll() 供命令面板列举
+- UI calls `pluginRuntime.executeCommand(commandId, options, ...args)`.
+- Runtime validates metadata and resolves the command handler.
+- Runtime performs on-demand activation if required.
+- Handler receives `CommandExecutionContext`:
+  - `activateView(viewId)`
+  - `executeCommand(commandId, ...args)` for cross-plugin orchestration
+  - `api` (the plugin's `PluginHostAPI`)
 
-校验：命令 ID 重复时 warn 而不 throw
+## Activation Strategy
 
-### view-registry.ts
-内置视图：存 React 组件引用
+Supported activation events:
 
-外部视图：存 iframe src URL
+- `onStartup`
+- `onCommand:<commandId>` / `onCommand:*`
+- `onView:<viewId>` / `onView:*`
 
-分 location bucket（sidebar / main / panel）
+## Protocol/Error Semantics (Implemented)
 
-onChange 通知 Shell 重渲染
+Frontend invoke gateway now enforces response semantics:
 
-### menu-registry.ts
-按 context 分组存储菜单项
+- `success === true`: pass
+- `success === false` and `code === "WARNING"`: only pass when caller explicitly sets `allowWarning`
+- other non-success responses: throw error
 
-getItems(context) 供 MenuBar 渲染
+This prevents silently treating non-warning failures as success and reduces state drift.
 
-onChange 通知 Shell
+## Commands
 
-### settings-registry.ts
-在 localStorage 持久化
+```bash
+pnpm dev
+pnpm build
+pnpm tauri dev
+```
 
-get/set/onChange
+1. `命令可执行链路`（最关键）
+- 现状：只有命令元数据注册/查询，没有“执行命令”接口和 handler 调度。
+- 证据：[plugin_commands.rs](E:/knln/Desktop/practice/plug-box/src-tauri/src/commands/plugin_commands.rs:31) 只有 `register/get/activate/deactivate`，没有 `execute_command`。
+- 影响：插件系统现在更像“元数据目录”，不是完整运行时。
 
-插件只能读写自己 namespace 下的 key（pluginId.key）
+2. `激活策略引擎`
+- 现状：manifest 有 `activationEvents`，但 runtime 直接全量 `activateAllPlugins`。
+- 证据：[plugin-protocol.ts](E:/knln/Desktop/practice/plug-box/src/core/plugin-protocol.ts:51)、[plugin-runtime.ts](E:/knln/Desktop/practice/plug-box/src/core/plugin-runtime.ts:60)。
+- 影响：无法做到按需激活、按命令激活、首次视图激活。
 
-plugin-api-factory.ts
+3. `插件 API 能力面（设置/存储/事件/命令调用）`
+- 现状：你移除了旧 TS API 后，当前前端没有新的插件调用 API 抽象，只有视图渲染。
+- 证据：[PluginRenderer.tsx](E:/knln/Desktop/practice/plug-box/src/shell/PluginRenderer.tsx:9) 仅按 `component_path` 渲染组件。
+- 影响：插件内部无法以标准方式访问宿主能力。
 
-工厂函数：createPluginAPI(pluginId, registries)
+4. `协议一致性与错误语义`
+- 现状：后端有 `ApiResponse.success/warning`，前端 `invokeApi` 没有检查 `success` 字段。
+- 证据：[plugin-backend.ts](E:/knln/Desktop/practice/plug-box/src/core/plugin-backend.ts:10)、[response.rs](E:/knln/Desktop/practice/plug-box/src-tauri/src/core/response.rs:5)。
+- 影响：后端返回 warning 时前端可能当成功处理，状态不一致。
 
-为每个插件绑定 pluginId，订阅/注册都打 namespace
+5. `唯一性与约束校验（跨插件）`
+- 现状：后端重复检查主要是“插件内重复”，不是全局命令 ID / 视图 ID 唯一。
+- 证据：[plugin_manager.rs](E:/knln/Desktop/practice/plug-box/src-tauri/src/core/plugin_manager.rs:239)（命令去重在单插件 entry 内）。
+- 影响：多插件冲突时行为不确定。
 
-收集该插件的所有 Disposable，统一清理
-
-plugin-bridge.ts（外部插件 iframe 通信）
-
-消息格式（postMessage）：
-
-// Plugin → Host
-type PluginMessage =
-  | { type: 'REGISTER_COMMAND'; id: string; callbackId: string }
-  | { type: 'EXECUTE_COMMAND'; id: string; args: unknown[]; reqId: string }
-  | { type: 'EMIT_EVENT'; event: string; data: unknown }
-  | { type: 'GET_SETTING'; key: string; reqId: string }
-  | { type: 'SET_SETTING'; key: string; value: unknown }
-  | { type: 'REGISTER_VIEW'; id: string };
-
-// Host → Plugin
-type HostMessage =
-  | { type: 'CALL_HANDLER'; callbackId: string; args: unknown[] }
-  | { type: 'COMMAND_RESULT'; reqId: string; result: unknown }
-  | { type: 'SETTING_VALUE'; reqId: string; value: unknown }
-  | { type: 'EVENT'; event: string; data: unknown };
-PluginBridge 职责：
-
-创建 iframe，设置 sandbox 属性（allow-scripts allow-same-origin）
-建立 MessageChannel，传入 iframe
-将收到的消息翻译为对 Registry 的调用
-
-### plugin-manager.ts
-registerBuiltin(manifest, pluginModule) — 注册内置插件
-loadExternal(manifestPath) — 从磁盘读取外部插件（Tauri fs API）
-activate(pluginId) — 调用 plugin.activate(api)
-deactivate(pluginId) — 清理所有 Disposable，销毁 iframe
-getAll() — 返回已知插件列表（用于插件管理 UI）
-
-## 学习路径
-graph TD
-    A[App.tsx 入口] --> B[plugin-manager.ts]
-    B --> C[plugin-api-factory.ts]
-    C --> D[command-registry.ts]
-    C --> E[view-registry.ts]
-    C --> F[menu-registry.ts]
-    D --> G[event-bus.ts]
-    E --> H[PluginViewHost.tsx]
-    F --> I[MenuBar.tsx]
-    G --> J[插件间通信实验]
-    H --> K[UI 渲染流程]
-    I --> L[菜单生成逻辑]
-    B --> M[sandbox/plugin-bridge.ts]
-    M --> N[iframe 沙箱通信]
+6. `工程级运维能力`
+- 包括：插件安装/卸载/升级、签名与权限模型、运行日志与诊断、端到端测试。
+- 影响：现在可开发，但离“可发布、可长期维护”的插件生态还差一层。

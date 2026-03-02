@@ -1,92 +1,150 @@
-use crate::core::{ApiResponse, JsPluginAdapter, PluginManifest};
-// src/commands.rs
-use crate::core::plugin_manager::{PluginManager, PluginManagerActivation};
-use crate::core::plugin_meta::{CommandMeta, PluginSummary, ViewMeta};
+/**
+ * Tauri command adapters for plugin manager.
+ * All commands return ApiResponse<T> for consistent frontend handling.
+ */
+use crate::core::{
+    ApiResponse, CommandMeta, JsPluginAdapter, PluginManager, PluginManagerActivation,
+    PluginManifest, PluginSummary, ViewMeta,
+};
 use std::sync::Mutex;
 use tauri::{command, State};
 
-//注册插件
+fn lock_error<T>() -> ApiResponse<T> {
+    ApiResponse::error("failed to acquire plugin manager lock".to_string())
+}
+
 #[command]
 pub fn register_js_plugin(
     manager: State<'_, Mutex<PluginManager>>,
     manifest: PluginManifest,
-) -> Result<ApiResponse<()>, String> {
-    let mut mgr = manager.lock().map_err(|_| "锁中毒")?;
+) -> ApiResponse<()> {
+    let mut mgr = match manager.lock() {
+        Ok(mgr) => mgr,
+        Err(_) => return lock_error(),
+    };
     let module = JsPluginAdapter::new(manifest.id.clone());
-    mgr.register_builtin(manifest, module)
+    match mgr.register_builtin(manifest, module) {
+        Ok(resp) => resp,
+        Err(err) => ApiResponse::error(err),
+    }
 }
 
-// 注册插件视图
 #[command]
 pub fn register_view_meta(
     manager: State<'_, Mutex<PluginManager>>,
     view: ViewMeta,
-) -> Result<ApiResponse<()>, String> {
-    let mut mgr = manager.lock().map_err(|_| "锁中毒")?;
-    mgr.register_view(view)
+) -> ApiResponse<()> {
+    let mut mgr = match manager.lock() {
+        Ok(mgr) => mgr,
+        Err(_) => return lock_error(),
+    };
+    match mgr.register_view(view) {
+        Ok(resp) => resp,
+        Err(err) => ApiResponse::error(err),
+    }
 }
 
-// 注册命令元数据
 #[command]
 pub fn register_command_meta(
     manager: State<'_, Mutex<PluginManager>>,
     command: CommandMeta,
-) -> Result<ApiResponse<()>, String> {
-    let mut mgr = manager.lock().map_err(|_| "锁中毒")?;
-    mgr.register_command(command)
+) -> ApiResponse<()> {
+    let mut mgr = match manager.lock() {
+        Ok(mgr) => mgr,
+        Err(_) => return lock_error(),
+    };
+    match mgr.register_command(command) {
+        Ok(resp) => resp,
+        Err(err) => ApiResponse::error(err),
+    }
 }
 
-// 获取所有插件摘要
 #[command]
 pub fn get_plugin_list(
     manager: State<'_, Mutex<PluginManager>>,
-) -> Result<Vec<PluginSummary>, String> {
-    let mgr = manager.lock().map_err(|_| "锁中毒")?;
-    Ok(mgr.list_plugins())
+) -> ApiResponse<Vec<PluginSummary>> {
+    let mgr = match manager.lock() {
+        Ok(mgr) => mgr,
+        Err(_) => return lock_error(),
+    };
+    ApiResponse::success(mgr.list_plugins(), "Ok".to_string())
 }
 
-// 获取所有已注册的插件视图
 #[command]
 pub fn get_registered_views(
     manager: State<'_, Mutex<PluginManager>>,
-) -> Result<Vec<ViewMeta>, String> {
-    let mgr = manager.lock().map_err(|_| "锁中毒")?;
-    Ok(mgr.get_all_views())
+) -> ApiResponse<Vec<ViewMeta>> {
+    let mgr = match manager.lock() {
+        Ok(mgr) => mgr,
+        Err(_) => return lock_error(),
+    };
+    ApiResponse::success(mgr.get_all_views(), "Ok".to_string())
 }
 
-// 获取所有已注册的命令元数据
 #[command]
 pub fn get_registered_commands(
     manager: State<'_, Mutex<PluginManager>>,
-) -> Result<Vec<CommandMeta>, String> {
-    let mgr = manager.lock().map_err(|_| "锁中毒")?;
-    Ok(mgr.get_all_commands())
+) -> ApiResponse<Vec<CommandMeta>> {
+    let mgr = match manager.lock() {
+        Ok(mgr) => mgr,
+        Err(_) => return lock_error(),
+    };
+    ApiResponse::success(mgr.get_all_commands(), "Ok".to_string())
+}
+
+#[command]
+pub fn assert_command_exposed(
+    manager: State<'_, Mutex<PluginManager>>,
+    command_id: String,
+    caller_plugin_id: Option<String>,
+) -> ApiResponse<()> {
+    let mgr = match manager.lock() {
+        Ok(mgr) => mgr,
+        Err(_) => return lock_error(),
+    };
+    mgr.assert_command_exposed(&command_id, caller_plugin_id.as_deref())
 }
 
 #[command]
 pub fn activate_all_plugins(
     manager: State<'_, Mutex<PluginManager>>,
-) -> Result<ApiResponse<()>, String> {
-    let mut mgr = manager.lock().map_err(|_| "锁中毒")?;
-    mgr.activate_all()
+) -> ApiResponse<()> {
+    let mut mgr = match manager.lock() {
+        Ok(mgr) => mgr,
+        Err(_) => return lock_error(),
+    };
+    match mgr.activate_all() {
+        Ok(resp) => resp,
+        Err(err) => ApiResponse::error(err),
+    }
 }
 
-// 卸载一个插件
 #[command]
 pub fn deactivate_plugin(
     manager: State<'_, Mutex<PluginManager>>,
     plugin_id: String,
-) -> Result<ApiResponse<()>, String> {
-    let mut mgr = manager.lock().map_err(|_| "锁中毒")?;
-    mgr.deactivate(&plugin_id)
+) -> ApiResponse<()> {
+    let mut mgr = match manager.lock() {
+        Ok(mgr) => mgr,
+        Err(_) => return lock_error(),
+    };
+    match mgr.deactivate(&plugin_id) {
+        Ok(resp) => resp,
+        Err(err) => ApiResponse::error(err),
+    }
 }
 
-// 激活一个已注册的插件或重新激活插件
 #[command]
 pub fn activate_plugin(
     manager: State<'_, Mutex<PluginManager>>,
     plugin_id: String,
-) -> Result<ApiResponse<()>, String> {
-    let mut mgr = manager.lock().map_err(|_| "锁中毒")?;
-    mgr.activate_by_id(&plugin_id)
+) -> ApiResponse<()> {
+    let mut mgr = match manager.lock() {
+        Ok(mgr) => mgr,
+        Err(_) => return lock_error(),
+    };
+    match mgr.activate_by_id(&plugin_id) {
+        Ok(resp) => resp,
+        Err(err) => ApiResponse::error(err),
+    }
 }

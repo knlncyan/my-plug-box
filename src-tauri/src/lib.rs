@@ -33,6 +33,7 @@ pub fn run() {
             commands::get_plugin_list,
             commands::get_registered_views,
             commands::get_registered_commands,
+            commands::assert_command_exposed,
             commands::activate_all_plugins,
             commands::deactivate_plugin,
             commands::activate_plugin,

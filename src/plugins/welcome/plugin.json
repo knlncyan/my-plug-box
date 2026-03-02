@@ -2,30 +2,21 @@
   "id": "builtin.welcome",
   "name": "Welcome",
   "version": "1.0.0",
-  "description": "Welcome page shown on startup",
-  "main": "./index.ts",
-  "activationEvents": ["onStartup"],
-  "contributes": {
-    "commands": [
-      {
-        "id": "welcome.open",
-        "title": "Open Welcome Page",
-        "category": "Welcome"
-      }
-    ],
-    "views": [
-      {
-        "id": "welcome.mainView",
-        "name": "Welcome",
-        "location": "main"
-      }
-    ],
-    "menus": [
-      {
-        "context": "menubar",
-        "command": "welcome.open",
-        "group": "help"
-      }
-    ]
-  }
+  "description": "Built-in welcome page plugin",
+  "activationEvents": ["onView:welcome.main", "onCommand:welcome.open"],
+  "views": [
+    {
+      "id": "welcome.main",
+      "title": "Welcome",
+      "component_path": "builtin.welcome/views/WelcomeView",
+      "props": {}
+    }
+  ],
+  "commands": [
+    {
+      "id": "welcome.open",
+      "description": "Open welcome page",
+      "expose": false
+    }
+  ]
 }

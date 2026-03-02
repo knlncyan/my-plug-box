@@ -1,5 +1,6 @@
 use serde::Serialize;
 
+/// Unified response envelope used by Tauri commands.
 #[derive(Debug, Clone, Serialize)]
 pub struct ApiResponse<T> {
     pub success: bool,
@@ -9,7 +10,6 @@ pub struct ApiResponse<T> {
 }
 
 impl<T> ApiResponse<T> {
-    /// 通用构造函数
     pub fn success(data: T, message: String) -> Self {
         ApiResponse {
             success: true,
@@ -23,6 +23,24 @@ impl<T> ApiResponse<T> {
         ApiResponse {
             success: false,
             code: "WARNING".to_string(),
+            message: message,
+            data: None,
+        }
+    }
+
+    pub fn conflict(message: String) -> Self {
+        ApiResponse {
+            success: false,
+            code: "CONFLICT".to_string(),
+            message: message,
+            data: None,
+        }
+    }
+
+    pub fn error(message: String) -> Self {
+        ApiResponse {
+            success: false,
+            code: "ERROR".to_string(),
             message: message,
             data: None,
         }

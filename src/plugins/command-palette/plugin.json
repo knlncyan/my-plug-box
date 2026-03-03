@@ -14,30 +14,26 @@
     {
       "id": "commandPalette.main",
       "title": "Command Palette",
-      "component_path": "builtin.command-palette/views/CommandPaletteView",
+      "component_path": "builtin.command-palette/view/CommandPaletteView",
       "props": {}
     }
   ],
   "commands": [
     {
       "id": "commandPalette.open",
-      "description": "Open command palette view",
-      "expose": true
+      "description": "Open command palette view"
     },
     {
       "id": "commandPalette.openWelcomeViaCommand",
-      "description": "Open welcome via cross-plugin command execution",
-      "expose": true
+      "description": "Open welcome via cross-plugin command execution"
     },
     {
       "id": "commandPalette.explainHooks",
-      "description": "Print activation hook explanations",
-      "expose": true
+      "description": "Print activation hook explanations"
     },
     {
       "id": "commandPalette.toggleVerbose",
-      "description": "Toggle command-palette verbose setting",
-      "expose": true
+      "description": "Toggle command-palette verbose setting"
     }
   ]
 }

@@ -19,12 +19,6 @@ pub struct CommandMeta {
     pub id: String,
     pub description: String,
     pub plugin_id: String,
-    #[serde(default = "default_command_expose")]
-    pub expose: bool,
-}
-
-fn default_command_expose() -> bool {
-    false
 }
 
 /// 插件简要信息 (用于列表展示)

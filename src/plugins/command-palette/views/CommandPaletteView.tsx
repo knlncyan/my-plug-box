@@ -2,7 +2,7 @@
  * Command palette view for discovering and running all registered commands.
  */
 import { useMemo, useState } from 'react';
-import { usePluginRuntime } from '../../../core/use-plugin-runtime';
+import { usePluginRuntime } from '../../../core/usePluginRuntime';
 
 export default function CommandPaletteView() {
   const { commands, executeCommand } = usePluginRuntime();
@@ -12,9 +12,7 @@ export default function CommandPaletteView() {
 
   const filteredCommands = useMemo(() => {
     const normalized = query.trim().toLowerCase();
-    const list = commands
-      .filter((command) => command.expose)
-      .sort((a, b) => a.id.localeCompare(b.id));
+    const list = [...commands].sort((a, b) => a.id.localeCompare(b.id));
     if (!normalized) return list;
     return list.filter((command) => {
       return (

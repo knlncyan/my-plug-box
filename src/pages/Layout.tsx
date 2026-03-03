@@ -2,7 +2,7 @@
  * Main workbench layout that displays plugin views and command launchers.
  */
 import { useCallback, useMemo, useState } from 'react';
-import { usePluginRuntime } from '../core/use-plugin-runtime';
+import { usePluginRuntime } from '../core/usePluginRuntime';
 import { PluginViewLoader } from '../shell/PluginRenderer';
 
 export default function Layout() {

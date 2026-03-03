@@ -15,8 +15,7 @@
   "commands": [
     {
       "id": "welcome.open",
-      "description": "Open welcome page",
-      "expose": false
+      "description": "Open welcome page"
     }
   ]
 }

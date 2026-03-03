@@ -3,9 +3,11 @@
  * All commands return ApiResponse<T> for consistent frontend handling.
  */
 use crate::core::{
-    ApiResponse, CommandMeta, JsPluginAdapter, PluginManager, PluginManagerActivation,
-    PluginManifest, PluginSummary, ViewMeta,
+    read_all_plugin_settings, read_plugin_storage_snapshot, write_plugin_setting,
+    write_plugin_storage_value, ApiResponse, CommandMeta, JsPluginAdapter, PluginManager,
+    PluginManagerActivation, PluginManifest, PluginSummary, ViewMeta,
 };
+use serde_json::Value;
 use std::sync::Mutex;
 use tauri::{command, State};
 
@@ -93,16 +95,35 @@ pub fn get_registered_commands(
 }
 
 #[command]
-pub fn assert_command_exposed(
-    manager: State<'_, Mutex<PluginManager>>,
-    command_id: String,
-    caller_plugin_id: Option<String>,
-) -> ApiResponse<()> {
-    let mgr = match manager.lock() {
-        Ok(mgr) => mgr,
-        Err(_) => return lock_error(),
-    };
-    mgr.assert_command_exposed(&command_id, caller_plugin_id.as_deref())
+pub fn get_all_plugin_settings() -> ApiResponse<Value> {
+    match read_all_plugin_settings() {
+        Ok(data) => ApiResponse::success(Value::Object(data), "Ok".to_string()),
+        Err(error) => ApiResponse::error(error),
+    }
+}
+
+#[command]
+pub fn set_plugin_setting(plugin_id: String, key: String, value: Value) -> ApiResponse<()> {
+    match write_plugin_setting(&plugin_id, &key, value) {
+        Ok(_) => ApiResponse::ok(),
+        Err(error) => ApiResponse::error(error),
+    }
+}
+
+#[command]
+pub fn get_plugin_storage_snapshot(plugin_id: String) -> ApiResponse<Value> {
+    match read_plugin_storage_snapshot(&plugin_id) {
+        Ok(data) => ApiResponse::success(Value::Object(data), "Ok".to_string()),
+        Err(error) => ApiResponse::error(error),
+    }
+}
+
+#[command]
+pub fn set_plugin_storage_value(plugin_id: String, key: String, value: Value) -> ApiResponse<()> {
+    match write_plugin_storage_value(&plugin_id, &key, value) {
+        Ok(_) => ApiResponse::ok(),
+        Err(error) => ApiResponse::error(error),
+    }
 }
 
 #[command]

@@ -156,48 +156,6 @@ impl PluginManager {
             .flat_map(|entry| entry.registered_commands.clone())
             .collect()
     }
-
-    pub fn assert_command_exposed(
-        &self,
-        command_id: &str,
-        caller_plugin_id: Option<&str>,
-    ) -> ApiResponse<()> {
-        let owner_plugin_id = match self._global_commands.get(command_id) {
-            Some(id) => id,
-            None => {
-                return ApiResponse::error(format!("command {} not found", command_id));
-            }
-        };
-
-        let entry = match self._plugins.get(owner_plugin_id) {
-            Some(entry) => entry,
-            None => {
-                return ApiResponse::error(format!(
-                    "plugin {} not found for command {}",
-                    owner_plugin_id, command_id
-                ));
-            }
-        };
-
-        let command = match entry.registered_commands.iter().find(|cmd| cmd.id == command_id) {
-            Some(cmd) => cmd,
-            None => {
-                return ApiResponse::error(format!(
-                    "command {} not registered in plugin {}",
-                    command_id, owner_plugin_id
-                ));
-            }
-        };
-
-        if caller_plugin_id.is_none()
-            || caller_plugin_id == Some(owner_plugin_id.as_str())
-            || command.expose
-        {
-            ApiResponse::ok()
-        } else {
-            ApiResponse::error(format!("command {} is not exposed", command_id))
-        }
-    }
 }
 
 impl PluginManagerActivation for PluginManager {

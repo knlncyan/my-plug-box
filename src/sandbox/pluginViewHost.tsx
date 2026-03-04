@@ -1,7 +1,5 @@
-/**
- * 视图沙箱入口。
- * 在 iframe 内部加载并渲染目标插件视图组件。
- */
+﻿/**
+ * 瑙嗗浘娌欑鍏ュ彛锛? * 鍦?iframe 鍐呭姞杞藉苟娓叉煋鐩爣鎻掍欢瑙嗗浘缁勪欢銆? */
 import { Component, type ComponentType, type ErrorInfo, type ReactNode, useEffect, useState } from 'react';
 import ReactDOM from 'react-dom/client';
 import '../index.css';
@@ -134,7 +132,7 @@ function App() {
 }
 
 function bootstrap(): void {
-  // 标记当前窗口为插件视图沙箱环境，供 usePluginRuntime 切换桥接模式。
+  // 标记当前窗口为插件视图沙箱环境，供 useCoreRuntime 切换桥接模式。
   window.__PLUGIN_VIEW_SANDBOX__ = true;
 
   const root = document.getElementById('root');
@@ -146,3 +144,4 @@ function bootstrap(): void {
 }
 
 bootstrap();
+

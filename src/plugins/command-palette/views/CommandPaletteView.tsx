@@ -2,10 +2,10 @@
  * Command palette view for discovering and running all registered commands.
  */
 import { useMemo, useState } from 'react';
-import { usePluginRuntime } from '../../../core/usePluginRuntime';
+import { useCoreRuntime } from '../../../core';
 
 export default function CommandPaletteView() {
-  const { commands, executeCommand } = usePluginRuntime();
+  const { commands, executeCommand } = useCoreRuntime();
   const [query, setQuery] = useState('');
   const [lastResult, setLastResult] = useState<string>('');
   const [runError, setRunError] = useState<string>('');

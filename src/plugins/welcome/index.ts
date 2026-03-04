@@ -2,7 +2,7 @@
  * Built-in welcome plugin module.
  * Provides frontend command handlers that complement backend metadata.
  */
-import type { BuiltinPluginModule } from '../../core/pluginRuntime.protocol';
+import type { BuiltinPluginModule } from '../../domain/protocol/plugin-runtime.protocol';
 
 const plugin: BuiltinPluginModule = {
   pluginId: 'builtin.welcome',

@@ -1,7 +1,7 @@
-import Layout from './pages/Layout';
+import { WorkbenchLayout } from './ui';
 
 function App() {
-  return <Layout />;
+  return <WorkbenchLayout />;
 }
 
 export default App;

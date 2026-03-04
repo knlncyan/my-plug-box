@@ -2,12 +2,12 @@
  * Main workbench layout that displays plugin views and command launchers.
  */
 import { useCallback, useMemo, useState } from 'react';
-import { usePluginRuntime } from '../core/usePluginRuntime';
-import { PluginViewLoader } from '../shell/PluginRenderer';
+import { useCoreRuntime } from '../../core';
+import { PluginViewLoader } from '../plugin/PluginRenderer';
 
-export default function Layout() {
+export default function WorkbenchLayout() {
     const { loading, ready, error, views, plugins, commands, activeViewId, executeCommand, setActiveView } =
-        usePluginRuntime();
+        useCoreRuntime();
     const [commandError, setCommandError] = useState<string | null>(null);
 
     const selectView = useCallback(

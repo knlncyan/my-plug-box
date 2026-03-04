@@ -1,19 +1,19 @@
-# plugin.json 配置文档（中文）
+﻿# plugin.json 配置文档（中文）
 
-本文档用于说明 `src/plugins/<plugin-folder>/plugin.json` 的配置格式与语义。
+本文档说明 `src/plugins/<plugin-folder>/plugin.json` 的配置格式与运行时语义。
 
 ## 1. 文件作用
 
-`plugin.json` 是插件清单（Manifest），用于声明插件的静态元信息和贡献点，包括：
+`plugin.json` 是插件清单（Manifest），用于声明：
 
 - 插件基础信息（`id`、`name`、`version`）
 - 激活策略（`activationEvents`）
 - 视图贡献（`views`）
 - 命令贡献（`commands`）
 
-前端运行时会读取该文件并将信息注册到 Rust 插件管理器。
+前端会读取该文件，并将元数据注册到 Rust 插件管理端。
 
-## 2. 最小可用示例
+## 2. 最小示例
 
 ```json
 {
@@ -43,20 +43,19 @@
   "commands": [
     {
       "id": "welcome.open",
-      "description": "Open welcome page",
-      "expose": false
+      "description": "Open welcome page"
     }
   ]
 }
 ```
 
-## 4. 顶层字段说明
+## 4. 顶层字段
 
 ### 4.1 `id`（必填）
 
 - 类型：`string`
-- 作用：插件唯一标识，全局唯一
-- 建议：使用命名空间前缀，例如 `builtin.xxx` / `your-company.xxx`
+- 作用：插件全局唯一标识
+- 建议：使用命名空间前缀，如 `builtin.xxx` / `org.xxx`
 
 ### 4.2 `name`（必填）
 
@@ -67,7 +66,7 @@
 
 - 类型：`string`
 - 作用：插件版本号
-- 建议：语义化版本（例如 `1.0.0`）
+- 建议：语义化版本（`1.0.0`）
 
 ### 4.4 `description`（可选）
 
@@ -87,62 +86,45 @@
 
 说明：
 
-- 未配置或空数组时，当前实现等价于可在启动时激活。
+- 未配置或空数组时，视为可在启动时激活。
 
-## 5. `views` 字段说明
+## 5. `views` 字段
 
-`views` 用于声明插件提供的页面。
-
-每一项字段：
-
-- `id`（必填，`string`）：视图唯一 ID，建议使用 `<plugin>.<name>` 风格。
-- `title`（必填，`string`）：视图标题。
-- `component_path`（必填，`string`）：组件路径标识，例如 `builtin.welcome/views/WelcomeView`。
-- `props`（可选，`object`）：传给视图组件的初始参数。
-
-## 6. `commands` 字段说明
-
-`commands` 用于声明插件命令元数据。
+`views` 用于声明插件提供的页面贡献。
 
 每一项字段：
 
-- `id`（必填，`string`）：命令唯一 ID。
-- `description`（必填，`string`）：命令描述。
-- `expose`（可选，`boolean`，默认 `false`）：命令是否对其他插件公开。
+- `id`（必填，`string`）：视图 ID（建议 `<plugin>.<name>`）
+- `title`（必填，`string`）：视图标题
+- `component_path`（必填，`string`）：组件路径标识（例如 `builtin.welcome/views/WelcomeView`）
+- `props`（可选，`object`）：传入视图组件的初始参数
 
-## 7. `expose` 语义（重要）
+## 6. `commands` 字段
 
-`expose` 只控制“跨插件调用”能力，不是“命令是否存在”。
+`commands` 用于声明命令元数据。
 
-- `expose: true`
-  - 其他插件可以调用该命令。
-- `expose: false`（或不写）
-  - 其他插件不能调用。
-  - 插件自身调用自己的命令仍然允许。
+每一项字段：
 
-补充：
+- `id`（必填，`string`）：命令 ID（建议 `<plugin>.<action>`）
+- `description`（必填，`string`）：命令描述
 
-- 当前实现中，宿主 UI 触发命令不受 `expose` 的跨插件限制（因为不是插件间调用）。
-- 命令面板等公共入口通常应只展示 `expose: true` 的命令。
+注意：
 
-## 8. 常见错误与建议
+- 命令是否可执行，取决于插件 `index.ts` 中是否实现了对应 handler。
+- 当前实现不再使用旧版 `expose` 字段。
 
-### 8.1 ID 冲突
+## 7. 约束与建议
 
-- 现象：不同插件使用同名 `id`（命令或视图）导致冲突。
-- 建议：统一使用插件名前缀（如 `welcome.open`、`welcome.main`）。
+1. 全局唯一性
+- 插件 ID、视图 ID、命令 ID 应保持全局唯一。
 
-### 8.2 `component_path` 无法解析
+2. 路径一致性
+- `component_path` 必须与实际视图文件路径可解析结果一致。
 
-- 现象：视图无法渲染，提示组件找不到。
-- 建议：检查路径与文件名是否一致，大小写是否匹配。
+3. 元数据与代码一致
+- `commands` 中声明的每个命令，应在插件模块中实现。
 
-### 8.3 配置了命令但没有实现 handler
-
-- 现象：命令存在但执行报错“handler 未实现”。
-- 建议：在对应插件 `index.ts` 的 `commands` 中实现同 ID 处理函数。
-
-## 9. 推荐模板
+## 8. 推荐模板
 
 ```json
 {
@@ -162,8 +144,7 @@
   "commands": [
     {
       "id": "myPlugin.open",
-      "description": "Open my plugin view",
-      "expose": true
+      "description": "Open my plugin view"
     }
   ]
 }

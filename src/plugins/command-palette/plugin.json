@@ -14,7 +14,7 @@
     {
       "id": "commandPalette.main",
       "title": "Command Palette",
-      "component_path": "builtin.command-palette/view/CommandPaletteView",
+      "component_path": "builtin.command-palette/views/CommandPaletteView",
       "props": {}
     }
   ],

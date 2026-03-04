@@ -1,7 +1,7 @@
 /**
- * 视图沙箱与主线程 runtime 的通信协议。
+ * 插件视图沙箱与主线程运行时的桥接通信协议。
  */
-import type { ExecuteCommandOptions, PluginRuntimeSnapshot } from './pluginRuntime';
+import type { ExecuteCommandOptions, PluginRuntimeSnapshot } from '../runtime';
 
 export type PluginViewRuntimeAction =
   | 'getSnapshot'
@@ -44,4 +44,3 @@ export interface PluginViewSetActiveViewPayload {
 export interface PluginViewActivateForViewPayload {
   viewId: string;
 }
-

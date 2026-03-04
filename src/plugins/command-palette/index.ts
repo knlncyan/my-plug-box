@@ -2,7 +2,7 @@
  * Built-in command palette plugin module.
  * Demonstrates startup/command/view activation hooks and provides command handlers.
  */
-import type { BuiltinPluginModule } from '../../core/pluginRuntime.protocol';
+import type { BuiltinPluginModule } from '../../domain/protocol/plugin-runtime.protocol';
 
 let verboseSettingWatcher: { dispose(): void } | null = null;
 
@@ -15,9 +15,9 @@ function printHookNotes(): void {
 
 const plugin: BuiltinPluginModule = {
     pluginId: 'builtin.command-palette',
-    activate: (api) => {
-        const launchCount = (api.storage.get<number>('launch_count') ?? 0) + 1;
-        api.storage.set('launch_count', launchCount);
+    activate: async (api) => {
+        const launchCount = ((await api.storage.get<number>('launch_count')) ?? 0) + 1;
+        await api.storage.set('launch_count', launchCount);
         api.events.emit('builtin.command-palette.activated', { launchCount });
         console.info(`[command-palette] frontend module activated. launch_count=${launchCount}`);
         printHookNotes();
@@ -36,6 +36,7 @@ const plugin: BuiltinPluginModule = {
         'commandPalette.open': (context) => {
             console.info('[command-palette] command "commandPalette.open" executed.');
             context.activateView('commandPalette.main');
+            context.api.capabilities.call
         },
         'commandPalette.openWelcomeViaCommand': async (context) => {
             console.info('[command-palette] executing cross-plugin command: welcome.open');
@@ -45,10 +46,10 @@ const plugin: BuiltinPluginModule = {
             printHookNotes();
             return 'Activation hook notes printed in console.';
         },
-        'commandPalette.toggleVerbose': (context) => {
-            const current = context.api.settings.get<boolean>('verbose') ?? false;
+        'commandPalette.toggleVerbose': async (context) => {
+            const current = (await context.api.settings.get<boolean>('verbose')) ?? false;
             const next = !current;
-            context.api.settings.set('verbose', next);
+            await context.api.settings.set('verbose', next);
             return `command-palette verbose = ${String(next)}`;
         },
     },

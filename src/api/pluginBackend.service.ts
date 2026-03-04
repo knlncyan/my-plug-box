@@ -12,13 +12,12 @@ import type {
   PluginManifestDto,
   PluginSummary,
   ViewMeta,
-} from './pluginRuntime.protocol';
+} from '../domain/protocol/plugin-catalog.protocol';
 import {
   ApiInterceptorPipeline,
   defaultApiLoggingInterceptor,
-  type ApiInterceptor,
-  type ApiInterceptorContext,
 } from '../utils/api-interceptor';
+import type { ApiInterceptor, ApiInterceptorContext } from '../domain/interceptor';
 
 interface InvokeApiOptions {
   allowWarning?: boolean;
@@ -71,6 +70,7 @@ class PluginBackendService {
 
   /**
   * 激活单个插件。
+  * TODO：激活插件应当返回数据吗？
   */
   async activatePlugin(pluginId: string): Promise<void> {
     await this.invokeApi<void>('activate_plugin', { pluginId }, { allowWarning: true });

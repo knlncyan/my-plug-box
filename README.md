@@ -1,133 +1,99 @@
-# plug-box
+﻿# plug-box
 
-A plugin-driven desktop app based on Tauri + React + TypeScript.
+一个基于 **Tauri 2 + React 19 + TypeScript** 的桌面插件系统示例项目。
 
-## Current Architecture
+当前版本重点是：
 
-- Rust backend is the source of truth for plugin metadata and lifecycle status.
-- Frontend runtime is responsible for:
-1. registering built-in plugin metadata,
-2. activation by strategy (`onStartup`, `onCommand:*`, `onView:*`),
-3. command execution dispatch,
-4. rendering plugin views,
-5. providing PluginHostAPI for plugin modules.
+- Rust 端负责插件元数据与生命周期状态。
+- 前端负责运行时编排、命令调度、沙箱隔离、UI 渲染。
+- 通过能力注册表（Capability Registry）扩展插件可调用的宿主能力。
 
-## Tech Stack
+## 架构概览
 
-- Frontend: React 19, TypeScript, Vite
-- Backend: Tauri 2, Rust
-- Bridge: Tauri `invoke` + event `listen`
+- `src-tauri/`：后端插件管理与持久化能力。
+- `src/core/`：IoC 装配、API 聚合、Worker 入口、运行时 Hook。
+- `src/service/`：激活、目录注册、命令执行、设置/存储、Worker 沙箱等核心服务。
+- `src/ui/`：宿主界面布局与插件视图渲染器。
+- `src/plugins/`：内置插件（`welcome`、`command-palette`）。
 
-## Docs
+## 关键设计
 
-- plugin.json 配置文档（中文）：`docs/plugin-json.zh-CN.md`
+1. `IoC 容器统一装配`
+- 入口：`src/core/index.ts`
+- 统一注入 `PluginRuntimeService`、`WorkerSandboxService`、`CapabilityRegistry` 等核心服务。
 
-## Project Structure
+2. `双沙箱模型`
+- 命令执行沙箱：每插件独立 Worker（`src/core/worker.ts`）。
+- 视图渲染沙箱：每插件视图独立 iframe（`src/ui/plugin/PluginRenderer.tsx` + `src/sandbox/pluginViewHost.tsx`）。
+
+3. `通用能力调用协议`
+- Worker -> Host 使用 `method + params` 协议（`src/domain/worker.ts`）。
+- 插件 API 支持：
+  - `api.capabilities.call(method, params)`
+  - `api.capabilities.get('capabilityId')`
+
+4. `能力注册表`
+- `CapabilityRegistry` 由 IoC 管理。
+- 业务侧可在任意模块调用 `registerCapability(...)` 注册能力。
+
+## 当前目录（简化）
 
 ```text
 src/
-  App.tsx
-  main.tsx
-  pages/
-    Layout.tsx
-  shell/
-    PluginRenderer.tsx
-  core/
-    plugin-protocol.ts
+  api/
     pluginBackend.service.ts
-    plugin-runtime.ts
-    use-plugin-runtime.ts
-  plugins/
+  core/
     index.ts
+    CapabilityRegistry.ts
+    PluginApiRegistry.ts
+    worker.ts
+    useCoreRuntime.ts
+  domain/
+    api.ts
+    capability.ts
+    runtime.ts
+    worker.ts
+    protocol/
+  service/
+    PluginRuntimeService.ts
+    PluginCommandService.ts
+    WorkerSandboxService.ts
+    ...
+  ui/
+    layout/WorkbenchLayout.tsx
+    plugin/PluginRenderer.tsx
+  sandbox/
+    pluginViewHost.tsx
+  plugins/
     welcome/
-      plugin.json
-      index.ts
-      views/
-        WelcomeView.tsx
     command-palette/
-      plugin.json
-      index.ts
-      views/
-        CommandPaletteView.tsx
 
 src-tauri/
   src/core/
   src/commands/
 ```
 
-## PluginHostAPI (Implemented)
-
-Plugin module `activate/deactivate` and command handlers now receive a standard API surface:
-
-- `commands.execute(commandId, ...args)`
-- `views.activate(viewId)`
-- `events.emit(event, payload)` / `events.on(event, handler)`
-- `settings.get/set/onChange` (plugin-id namespaced)
-- `storage.get/set` (plugin-id isolated local storage)
-
-This enables plugin isolation while still allowing collaboration through exposed commands.
-
-## Command Execution Chain
-
-- UI calls `pluginRuntime.executeCommand(commandId, options, ...args)`.
-- Runtime validates metadata and resolves the command handler.
-- Runtime performs on-demand activation if required.
-- Handler receives `CommandExecutionContext`:
-  - `activateView(viewId)`
-  - `executeCommand(commandId, ...args)` for cross-plugin orchestration
-  - `api` (the plugin's `PluginHostAPI`)
-
-## Activation Strategy
-
-Supported activation events:
-
-- `onStartup`
-- `onCommand:<commandId>` / `onCommand:*`
-- `onView:<viewId>` / `onView:*`
-
-## Protocol/Error Semantics (Implemented)
-
-Frontend invoke gateway now enforces response semantics:
-
-- `success === true`: pass
-- `success === false` and `code === "WARNING"`: only pass when caller explicitly sets `allowWarning`
-- other non-success responses: throw error
-
-This prevents silently treating non-warning failures as success and reduces state drift.
-
-## Commands
+## 快速开始
 
 ```bash
+pnpm install
 pnpm dev
-pnpm build
 pnpm tauri dev
 ```
 
-1. `命令可执行链路`（最关键）
-- 现状：只有命令元数据注册/查询，没有“执行命令”接口和 handler 调度。
-- 证据：[plugin_commands.rs](E:/knln/Desktop/practice/plug-box/src-tauri/src/commands/plugin_commands.rs:31) 只有 `register/get/activate/deactivate`，没有 `execute_command`。
-- 影响：插件系统现在更像“元数据目录”，不是完整运行时。
+构建：
 
-2. `激活策略引擎`
-- 现状：manifest 有 `activationEvents`，但 runtime 直接全量 `activateAllPlugins`。
-- 证据：[plugin-protocol.ts](E:/knln/Desktop/practice/plug-box/src/core/plugin-protocol.ts:51)、[plugin-runtime.ts](E:/knln/Desktop/practice/plug-box/src/core/plugin-runtime.ts:60)。
-- 影响：无法做到按需激活、按命令激活、首次视图激活。
+```bash
+pnpm build
+```
 
-3. `插件 API 能力面（设置/存储/事件/命令调用）`
-- 现状：你移除了旧 TS API 后，当前前端没有新的插件调用 API 抽象，只有视图渲染。
-- 证据：[PluginRenderer.tsx](E:/knln/Desktop/practice/plug-box/src/shell/PluginRenderer.tsx:9) 仅按 `component_path` 渲染组件。
-- 影响：插件内部无法以标准方式访问宿主能力。
+## 文档
 
-4. `协议一致性与错误语义`
-- 现状：后端有 `ApiResponse.success/warning`，前端 `invokeApi` 没有检查 `success` 字段。
-- 证据：[plugin-backend.ts](E:/knln/Desktop/practice/plug-box/src/core/plugin-backend.ts:10)、[response.rs](E:/knln/Desktop/practice/plug-box/src-tauri/src/core/response.rs:5)。
-- 影响：后端返回 warning 时前端可能当成功处理，状态不一致。
+- 插件清单规范（中文）：`docs/plugin-json.zh-CN.md`
+- 插件开发手册（中文）：`docs/plugin-development.zh-CN.md`
+- Core 运行时说明（中文）：`docs/core-runtime.zh-CN.md`
+- 能力注册表示例：`docs/xxx.md`
 
-5. `唯一性与约束校验（跨插件）`
-- 现状：后端重复检查主要是“插件内重复”，不是全局命令 ID / 视图 ID 唯一。
-- 证据：[plugin_manager.rs](E:/knln/Desktop/practice/plug-box/src-tauri/src/core/plugin_manager.rs:239)（命令去重在单插件 entry 内）。
-- 影响：多插件冲突时行为不确定。
+## 说明
 
-6. `工程级运维能力`
-- 包括：插件安装/卸载/升级、签名与权限模型、运行日志与诊断、端到端测试。
-- 影响：现在可开发，但离“可发布、可长期维护”的插件生态还差一层。
+`README` 只描述当前主干实现。若代码与文档冲突，以 `src/core/index.ts` 注入关系与 `src/service/*` 实现为准。

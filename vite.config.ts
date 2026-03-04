@@ -18,6 +18,13 @@ export default defineConfig(async () => ({
     port: 1420,
     strictPort: true,
     host: host || false,
+    // 插件视图 iframe 在 sandbox 下会是 origin=null，开发态需要显式放开 CORS。
+    cors: {
+      origin: "*",
+    },
+    headers: {
+      "Access-Control-Allow-Origin": "*",
+    },
     hmr: host
       ? {
           protocol: "ws",

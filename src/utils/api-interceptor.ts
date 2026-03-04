@@ -1,21 +1,7 @@
 /**
  * Generic API interceptor pipeline and default response-code handling.
  */
-interface ApiLikeResponse {
-  success: boolean;
-  code: string;
-  message: string;
-}
-
-export interface ApiInterceptorContext<TResponse = unknown> {
-  command: string;
-  payload?: Record<string, unknown>;
-  response: TResponse;
-}
-
-export type ApiInterceptor = <TResponse extends ApiLikeResponse>(
-  context: ApiInterceptorContext<TResponse>
-) => void;
+import type { ApiInterceptor, ApiInterceptorContext, ApiLikeResponse } from '../domain/interceptor';
 
 export class ApiInterceptorPipeline {
   private readonly interceptors = new Set<ApiInterceptor>();

@@ -1,20 +1,20 @@
-/**
- * 插件基础资源管理器。
- * 该目录层仅负责静态 manifest 的加载和后端注册，不处理命令执行。
- */
-import type { BuiltinPluginManifest, BuiltinPluginModule } from './pluginRuntime.protocol';
-import service from './pluginBackend.service';
+import type { BuiltinPluginManifest } from '../domain/protocol/plugin-catalog.protocol';
+import service from '../api/pluginBackend.service';
 
-export class PluginRuntimeAssets {
+/**
+ * 插件资源目录服务：
+ * 1) 负责加载内置插件 manifest。
+ * 2) 负责把 manifest/views/commands 注册到后端。
+ * 3) 不负责命令执行与激活流程。
+ */
+export class PluginAssetCatalogService {
     private initialized = false;
     private readonly manifestsById = new Map<string, BuiltinPluginManifest>();
-    private readonly pluginEntryById = new Map<string, BuiltinPluginModule>();
 
-    // 构造器根据传入的路径解析相关静态资源
     constructor() {
-        const manifestModules = import.meta.glob(`../plugins/*/plugin.json`,
-            { eager: true }
-        ) as Record<string, { default: BuiltinPluginManifest }>;
+        const manifestModules = import.meta.glob(`../plugins/*/plugin.json`, {
+            eager: true,
+        }) as Record<string, { default: BuiltinPluginManifest }>;
 
         for (const mod of Object.values(manifestModules)) {
             const pluginId = mod.default.id;
@@ -24,23 +24,11 @@ export class PluginRuntimeAssets {
             }
             this.manifestsById.set(pluginId, mod.default);
         }
-
-        const pluginEntryModules = import.meta.glob(`../plugins/*/index.ts`,
-            { eager: true }
-        ) as Record<string, { default: BuiltinPluginModule }>;
-        for (const mod of Object.values(pluginEntryModules)) {
-            const pluginId = mod.default.pluginId;
-            if (this.manifestsById.has(pluginId)) {
-                console.error(`Duplicated plugin id: ${pluginId}`);
-                continue;
-            }
-            this.pluginEntryById.set(pluginId, mod.default);
-        }
     }
 
     /**
-    * 注册所有内置插件 manifest 到后端。
-    */
+     * 注册全部内置插件元数据到后端。
+     */
     async registerBuiltins(): Promise<void> {
         if (this.initialized) return;
 
@@ -73,17 +61,9 @@ export class PluginRuntimeAssets {
     }
 
     /**
-    * 按 pluginId 读取 manifest。
-    */
-    getManifest(pluginId: string): BuiltinPluginManifest | undefined {
-        return this.manifestsById.get(pluginId);
-    }
-
-    /**
-    * 获取全部 manifest 的迭代器。
-    */
+     * 获取全部插件 manifest 迭代器。
+     */
     getAllManifests(): IterableIterator<BuiltinPluginManifest> {
         return this.manifestsById.values();
     }
 }
-

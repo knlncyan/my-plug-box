@@ -13,12 +13,9 @@ import type {
  */
 export class CapabilityRegistry {
     private readonly factories = new Map<string, CapabilityFactory<CapabilityContract>>();
-    private readonly capabilityCache = new Map<string, CapabilityContract>();
+    private readonly capabilityCache = new Map<string, unknown>();
 
-    register<K extends string>(
-        capabilityId: K,
-        factory: CapabilityFactory<CapabilityById<K>>
-    ): () => void {
+    register<K extends string>(capabilityId: K, factory: CapabilityFactory<CapabilityById<K>>): () => void {
         if (this.factories.has(capabilityId)) {
             throw new Error(`Duplicated capability id: ${capabilityId}`);
         }
@@ -63,7 +60,7 @@ export class CapabilityRegistry {
         if (typeof member !== 'function') {
             throw new Error(`Capability method not found: ${capabilityId}.${method}`);
         }
-        return member(...args);
+        return (member as (...invokeArgs: unknown[]) => unknown | Promise<unknown>)(...args);
     }
 
     private buildCacheKey(pluginId: string, capabilityId: string): string {

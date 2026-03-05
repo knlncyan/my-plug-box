@@ -9,7 +9,7 @@
 
 2. 核心层（`src/core`）
 - IoC 装配（`index.ts`）
-- 宿主 API 聚合（`PluginApiRegistry.ts`）
+- 宿主 API 聚合（`service/PluginHostApiService.ts`）
 - 能力注册中心（`CapabilityRegistry.ts`）
 - Worker 入口（`worker.ts`）
 - React Hook（`useCoreRuntime.ts`）

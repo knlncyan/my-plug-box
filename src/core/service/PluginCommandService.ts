@@ -3,9 +3,9 @@
  * 1) 维护命令目录缓存。
  * 2) 处理执行链路（按需激活、循环检测、Worker 转发）。
  */
-import service from '../api/pluginBackend.service';
-import type { CommandMeta } from '../domain/protocol/plugin-catalog.protocol';
-import type { ExecuteCommandPipelineOptions } from '../domain/runtime';
+import service from '../../api/plugin.service';
+import type { CommandMeta } from '../../domain/protocol/plugin-catalog.protocol';
+import type { ExecuteCommandPipelineOptions } from '../../domain/runtime';
 import { PluginActivationService } from './PluginActivationService';
 import { PluginViewService } from './PluginViewService';
 import { WorkerSandboxService } from './WorkerSandboxService';

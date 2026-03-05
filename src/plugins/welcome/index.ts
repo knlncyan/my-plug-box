@@ -8,7 +8,8 @@ const plugin: BuiltinPluginModule = {
   pluginId: 'builtin.welcome',
   commands: {
     'welcome.open': (context) => {
-      context.activateView('welcome.main');
+      const views = context.api.get('views');
+      views.activate('welcome.main');
     },
   },
 };

@@ -1,10 +1,17 @@
-/**
+﻿/**
  * 插件命令 Worker 入口：
  * 1) 运行在 Worker 环境，隔离插件命令执行上下文。
- * 2) 通过消息协议向宿主请求能力（跨插件命令、视图激活、设置/存储持久化等）。
+ * 2) 通过消息协议向宿主请求能力（命令、视图、事件、设置、存储等）。
  */
-import type { PluginHostAPI } from '../domain/api';
-import type { CapabilityContract } from '../domain/capability';
+import type {
+    CommandsCapability,
+    EventsCapability,
+    PluginHostAPI,
+    SettingsCapability,
+    StorageCapability,
+    ViewsCapability,
+} from '../../domain/api';
+import type { CapabilityById, CapabilityContract } from '../../domain/capability';
 import type {
     HostEventMessage,
     HostRequestMessage,
@@ -12,13 +19,15 @@ import type {
     PendingRequest,
     WorkerRequestMessage,
     WorkerResponseMessage,
-} from '../domain/worker';
+} from '../../domain/worker';
 import type {
     BuiltinPluginModule,
     CommandExecutionContext,
-} from '../domain/protocol/plugin-runtime.protocol';
-
-const pluginModules = import.meta.glob('../plugins/*/index.ts');
+} from '../../domain/protocol/plugin-runtime.protocol';
+import {
+    getPluginModuleLoaderById,
+    resolvePluginModuleKey,
+} from '../utils/PluginResourceLoader';
 
 let pluginId = '';
 let pluginModule: BuiltinPluginModule | null = null;
@@ -29,14 +38,10 @@ let activeTrace: string[] = [];
 
 const pendingRequests = new Map<string, PendingRequest>();
 const capabilityProxyById = new Map<string, CapabilityContract>();
+const builtinCapabilityCache = new Map<string, CapabilityContract>();
 const eventListeners = new Map<string, Set<(payload: unknown) => void>>();
 const settingWatchers = new Map<string, Set<(value: unknown) => void>>();
 let requestSerial = 0;
-
-function resolvePluginModuleKey(id: string): string {
-    const folder = id.replace(/^builtin\./, '');
-    return `../plugins/${folder}/index.ts`;
-}
 
 async function ensurePluginModule(): Promise<BuiltinPluginModule> {
     if (pluginModule) return pluginModule;
@@ -45,9 +50,7 @@ async function ensurePluginModule(): Promise<BuiltinPluginModule> {
     }
 
     const moduleKey = resolvePluginModuleKey(pluginId);
-    const loader = pluginModules[moduleKey] as
-        | (() => Promise<{ default?: BuiltinPluginModule }>)
-        | undefined;
+    const loader = getPluginModuleLoaderById(pluginId);
 
     if (!loader) {
         throw new Error(`Plugin module not found: ${moduleKey}`);
@@ -73,8 +76,6 @@ function postHostResponse(requestId: string, result?: unknown, error?: string): 
 
 /**
  * 向宿主发起通用能力调用。
- * - `method` 采用能力命名空间（如 `command.execute`）。
- * - `params` 为对应能力的参数对象。
  */
 function callHost(method: string, params?: unknown): Promise<unknown> {
     requestSerial += 1;
@@ -104,112 +105,150 @@ function notifySettingWatchers(key: string, value: unknown): void {
     }
 }
 
+function resolveBuiltinCapability(capabilityId: string): CapabilityContract | null {
+    const cached = builtinCapabilityCache.get(capabilityId);
+    if (cached) return cached;
+
+    let capability: CapabilityContract | null = null;
+
+    switch (capabilityId) {
+        case 'commands': {
+            const commands: CommandsCapability = {
+                execute: async (commandId: string, ...args: unknown[]) =>
+                    callHost('command.execute', {
+                        commandId,
+                        args,
+                        trace: activeTrace,
+                    }),
+            };
+            capability = commands as unknown as CapabilityContract;
+            break;
+        }
+        case 'views': {
+            const views: ViewsCapability = {
+                activate: (viewId: string): void => {
+                    void callHost('view.activate', { viewId });
+                },
+            };
+            capability = views as unknown as CapabilityContract;
+            break;
+        }
+        case 'events': {
+            const events: EventsCapability = {
+                emit: (event: string, payload?: unknown): void => {
+                    void callHost('event.emit', { event, payload });
+                },
+                on: (event: string, handler: (payload: unknown) => void) => {
+                    let listeners = eventListeners.get(event);
+                    if (!listeners) {
+                        listeners = new Set();
+                        eventListeners.set(event, listeners);
+                    }
+                    listeners.add(handler);
+                    return {
+                        dispose: () => {
+                            listeners?.delete(handler);
+                            if (listeners && listeners.size === 0) {
+                                eventListeners.delete(event);
+                            }
+                        },
+                    };
+                },
+            };
+            capability = events as unknown as CapabilityContract;
+            break;
+        }
+        case 'settings': {
+            const settings: SettingsCapability = {
+                get: async <T>(key: string): Promise<T | undefined> => {
+                    const scopedKey = `${pluginId}.${key}`;
+                    return settingsSnapshot[scopedKey] as T | undefined;
+                },
+                set: async (key: string, value: unknown): Promise<void> => {
+                    const scopedKey = `${pluginId}.${key}`;
+                    settingsSnapshot[scopedKey] = value;
+                    notifySettingWatchers(key, value);
+                    await callHost('settings.set', { key, value });
+                },
+                onChange: <T>(key: string, handler: (value: T | undefined) => void) => {
+                    let watchers = settingWatchers.get(key);
+                    if (!watchers) {
+                        watchers = new Set();
+                        settingWatchers.set(key, watchers);
+                    }
+                    const wrapped = (value: unknown) => handler(value as T | undefined);
+                    watchers.add(wrapped);
+                    return {
+                        dispose: () => {
+                            watchers?.delete(wrapped);
+                            if (watchers && watchers.size === 0) {
+                                settingWatchers.delete(key);
+                            }
+                        },
+                    };
+                },
+            };
+            capability = settings as unknown as CapabilityContract;
+            break;
+        }
+        case 'storage': {
+            const storage: StorageCapability = {
+                get: async <T>(key: string): Promise<T | undefined> => {
+                    return storageSnapshot[key] as T | undefined;
+                },
+                set: async (key: string, value: unknown): Promise<void> => {
+                    storageSnapshot[key] = value;
+                    await callHost('storage.set', { key, value });
+                },
+            };
+            capability = storage as unknown as CapabilityContract;
+            break;
+        }
+        default:
+            capability = null;
+    }
+
+    if (!capability) return null;
+    builtinCapabilityCache.set(capabilityId, capability);
+    return capability;
+}
+
 const hostApi: PluginHostAPI = {
     get pluginId() {
         return pluginId;
     },
-    capabilities: {
-        call: async <T = unknown>(method: string, params?: unknown): Promise<T> => {
-            return (await callHost(method, params)) as T;
-        },
-        get: <K extends string, T extends CapabilityContract>(capabilityId: K): T => {
-            const existing = capabilityProxyById.get(capabilityId);
-            if (existing) {
-                return existing as T;
-            }
+    call: async <T = unknown>(method: string, params?: unknown): Promise<T> => {
+        return (await callHost(method, params)) as T;
+    },
+    get: <K extends string>(capabilityId: K): CapabilityById<K> => {
+        const builtin = resolveBuiltinCapability(capabilityId);
+        if (builtin) {
+            return builtin as CapabilityById<K>;
+        }
 
-            // 通过 Proxy 将方法调用转发到宿主通用能力分发器。
-            const proxy = new Proxy(
-                {},
-                {
-                    get: (_target, methodName) => {
-                        if (typeof methodName !== 'string') return undefined;
-                        return (...args: unknown[]) =>
-                            callHost('capability.invoke', {
-                                capabilityId,
-                                method: methodName,
-                                args,
-                            });
-                    },
-                }
-            ) as CapabilityContract;
+        const existing = capabilityProxyById.get(capabilityId);
+        if (existing) {
+            return existing as CapabilityById<K>;
+        }
 
-            capabilityProxyById.set(capabilityId, proxy);
-            return proxy as T;
-        },
-    },
-    commands: {
-        execute: async (commandId: string, ...args: unknown[]) => {
-            return callHost('command.execute', {
-                commandId,
-                args,
-                trace: activeTrace,
-            });
-        },
-    },
-    views: {
-        activate: (viewId: string) => {
-            void callHost('view.activate', { viewId });
-        },
-    },
-    events: {
-        emit: (event: string, payload?: unknown) => {
-            void callHost('event.emit', { event, payload });
-        },
-        on: (event: string, handler: (payload: unknown) => void) => {
-            let listeners = eventListeners.get(event);
-            if (!listeners) {
-                listeners = new Set();
-                eventListeners.set(event, listeners);
-            }
-            listeners.add(handler);
-            return {
-                dispose: () => {
-                    listeners?.delete(handler);
-                    if (listeners && listeners.size === 0) {
-                        eventListeners.delete(event);
-                    }
+        // 通过 Proxy 将方法调用转发到宿主 capability.invoke 分发器。
+        const proxy = new Proxy(
+            {},
+            {
+                get: (_target, methodName) => {
+                    if (typeof methodName !== 'string') return undefined;
+                    return (...args: unknown[]) =>
+                        callHost('capability.invoke', {
+                            capabilityId,
+                            method: methodName,
+                            args,
+                        });
                 },
-            };
-        },
-    },
-    settings: {
-        get: async <T>(key: string): Promise<T | undefined> => {
-            const scopedKey = `${pluginId}.${key}`;
-            return settingsSnapshot[scopedKey] as T | undefined;
-        },
-        set: async (key: string, value: unknown): Promise<void> => {
-            const scopedKey = `${pluginId}.${key}`;
-            settingsSnapshot[scopedKey] = value;
-            notifySettingWatchers(key, value);
-            await callHost('settings.set', { key, value });
-        },
-        onChange: <T>(key: string, handler: (value: T | undefined) => void) => {
-            let watchers = settingWatchers.get(key);
-            if (!watchers) {
-                watchers = new Set();
-                settingWatchers.set(key, watchers);
             }
-            const wrapped = (value: unknown) => handler(value as T | undefined);
-            watchers.add(wrapped);
-            return {
-                dispose: () => {
-                    watchers?.delete(wrapped);
-                    if (watchers && watchers.size === 0) {
-                        settingWatchers.delete(key);
-                    }
-                },
-            };
-        },
-    },
-    storage: {
-        get: async <T>(key: string): Promise<T | undefined> => {
-            return storageSnapshot[key] as T | undefined;
-        },
-        set: async (key: string, value: unknown): Promise<void> => {
-            storageSnapshot[key] = value;
-            await callHost('storage.set', { key, value });
-        },
+        ) as CapabilityContract;
+
+        capabilityProxyById.set(capabilityId, proxy);
+        return proxy as CapabilityById<K>;
     },
 };
 
@@ -228,9 +267,6 @@ async function executeCommand(
     activeTrace = trace;
     try {
         const context: CommandExecutionContext = {
-            activateView: (viewId: string) => hostApi.views.activate(viewId),
-            executeCommand: (targetCommandId: string, ...nestedArgs: unknown[]) =>
-                hostApi.commands.execute(targetCommandId, ...nestedArgs),
             api: hostApi,
         };
         return await handler(context, ...args);

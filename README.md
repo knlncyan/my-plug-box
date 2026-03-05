@@ -24,7 +24,7 @@
 
 2. `双沙箱模型`
 - 命令执行沙箱：每插件独立 Worker（`src/core/worker.ts`）。
-- 视图渲染沙箱：每插件视图独立 iframe（`src/ui/plugin/PluginRenderer.tsx` + `src/sandbox/pluginViewHost.tsx`）。
+- 视图渲染沙箱：每插件视图独立 iframe（`src/ui/plugin/PluginRenderer.tsx` + `src/core/sandbox/pluginViewHost.tsx`）。
 
 3. `通用能力调用协议`
 - Worker -> Host 使用 `method + params` 协议（`src/domain/worker.ts`）。
@@ -45,7 +45,7 @@ src/
   core/
     index.ts
     CapabilityRegistry.ts
-    PluginApiRegistry.ts
+    service/PluginHostApiService.ts
     worker.ts
     useCoreRuntime.ts
   domain/

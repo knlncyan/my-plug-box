@@ -1,12 +1,10 @@
-/**
+﻿/**
  * 插件运行时协议：
- * 描述插件前端入口模块、命令处理器和命令执行上下文。
+ * 描述插件前端入口模块、命令处理器与命令执行上下文。
  */
 import type { PluginHostAPI } from '../api';
 
 export interface CommandExecutionContext {
-  activateView(viewId: string): void;
-  executeCommand(commandId: string, ...args: unknown[]): Promise<unknown>;
   api: PluginHostAPI;
 }
 

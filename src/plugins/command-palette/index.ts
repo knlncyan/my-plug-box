@@ -16,14 +16,17 @@ function printHookNotes(): void {
 const plugin: BuiltinPluginModule = {
     pluginId: 'builtin.command-palette',
     activate: async (api) => {
-        const launchCount = ((await api.storage.get<number>('launch_count')) ?? 0) + 1;
-        await api.storage.set('launch_count', launchCount);
-        api.events.emit('builtin.command-palette.activated', { launchCount });
+        const storage = api.get('storage');
+        const events = api.get('events');
+        const settings = api.get('settings');
+        const launchCount = ((await storage.get<number>('launch_count')) ?? 0) + 1;
+        await storage.set('launch_count', launchCount);
+        events.emit('builtin.command-palette.activated', { launchCount });
         console.info(`[command-palette] frontend module activated. launch_count=${launchCount}`);
         printHookNotes();
 
         verboseSettingWatcher?.dispose();
-        verboseSettingWatcher = api.settings.onChange<boolean>('verbose', (value) => {
+        verboseSettingWatcher = settings.onChange<boolean>('verbose', (value) => {
             console.info(`[command-palette] setting changed: verbose=${String(value)}`);
         });
     },
@@ -35,21 +38,23 @@ const plugin: BuiltinPluginModule = {
     commands: {
         'commandPalette.open': (context) => {
             console.info('[command-palette] command "commandPalette.open" executed.');
-            context.activateView('commandPalette.main');
-            context.api.capabilities.call
+            const views = context.api.get('views');
+            views.activate('commandPalette.main');
         },
         'commandPalette.openWelcomeViaCommand': async (context) => {
             console.info('[command-palette] executing cross-plugin command: welcome.open');
-            return context.executeCommand('welcome.open');
+            const commands = context.api.get('commands');
+            return commands.execute('welcome.open');
         },
         'commandPalette.explainHooks': () => {
             printHookNotes();
             return 'Activation hook notes printed in console.';
         },
         'commandPalette.toggleVerbose': async (context) => {
-            const current = (await context.api.settings.get<boolean>('verbose')) ?? false;
+            const settings = context.api.get('settings');
+            const current = (await settings.get<boolean>('verbose')) ?? false;
             const next = !current;
-            await context.api.settings.set('verbose', next);
+            await settings.set('verbose', next);
             return `command-palette verbose = ${String(next)}`;
         },
     },

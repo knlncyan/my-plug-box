@@ -1,12 +1,7 @@
-﻿import type { BuiltinPluginManifest } from './protocol/plugin-catalog.protocol';
-
-/**
- * 插件 manifest 类型别名：
- * 统一复用协议层定义，避免与 protocol 重复维护。
+﻿/**
+ * 插件状态定义：
+ * - 仅保留运行时状态相关类型，避免与 manifest 协议重复定义。
  */
-export type PluginManifest = BuiltinPluginManifest;
-export type PluginManifestJSON = BuiltinPluginManifest;
-
 export type PluginStatus =
     | 'registered'
     | 'activating'

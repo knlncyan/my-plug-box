@@ -1,9 +1,10 @@
 ﻿// PluginActivationService.ts
 import { listen, type Event } from '@tauri-apps/api/event';
-import service from '../api/pluginBackend.service';
-import type { PluginManifestJSON, RustPluginStatus } from '../domain/plugin';
-import type { PluginSummary } from '../domain/protocol/plugin-catalog.protocol';
-import { PluginDisposable } from '../core/PluginDisposable';
+import service from '../../api/plugin.service';
+import type { RustPluginStatus } from '../../domain/plugin';
+import type { BuiltinPluginManifest, PluginSummary } from '../../domain/protocol/plugin-catalog.protocol';
+import { PluginDisposable } from '../PluginDisposable';
+import { getBuiltinPluginManifests } from '../utils/PluginResourceLoader';
 import {
     shouldActivateForCommand,
     shouldActivateForView,
@@ -17,23 +18,18 @@ import {
  * 3) 监听 Rust 端状态事件，保证前后端状态一致。
  */
 export class PluginActivationService {
-    private readonly plugins = new Map<string, PluginManifestJSON>();
-    private readonly activatedPlugins = new Map<string, PluginManifestJSON>();
+    private readonly plugins = new Map<string, BuiltinPluginManifest>();
+    private readonly activatedPlugins = new Map<string, BuiltinPluginManifest>();
     private statusChangeListener: (() => void) | null = null;
 
     constructor(private readonly pluginDisposable: PluginDisposable) {
-        // 目录迁移后，这里应指向 src/plugins。
-        const manifestModules = import.meta.glob(`../plugins/*/plugin.json`, {
-            eager: true,
-        }) as Record<string, { default: PluginManifestJSON }>;
-
-        for (const mod of Object.values(manifestModules)) {
-            const pluginId = mod.default.id;
+        for (const manifest of getBuiltinPluginManifests()) {
+            const pluginId = manifest.id;
             if (this.plugins.has(pluginId)) {
                 console.error(`Duplicated plugin id: ${pluginId}`);
                 continue;
             }
-            this.plugins.set(pluginId, mod.default);
+            this.plugins.set(pluginId, manifest);
         }
     }
 

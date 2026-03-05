@@ -1,8 +1,10 @@
-import service from '../api/pluginBackend.service';
-import { PluginEventBus } from '../core/PluginEventBus';
+﻿import service from '../../api/plugin.service';
+import { PluginEventBus } from '../PluginEventBus';
 
 /**
- * 设置服务，设置采用全局存储
+ * 插件设置服务：
+ * 1) 以平面键值维护全局与插件设置（如 global.theme、builtin.xxx.verbose）。
+ * 2) 提供插件作用域读取与持久化写入。
  */
 export class PluginSettingService {
     private setting: Record<string, unknown> = {};
@@ -12,23 +14,24 @@ export class PluginSettingService {
 
     private ensureLoaded(): Promise<void> {
         if (!this.loadPromise) {
-            this.loadPromise = this._load();
+            this.loadPromise = this.loadAll();
         }
         return this.loadPromise;
     }
 
-    private async _load(): Promise<void> {
+    private async loadAll(): Promise<void> {
         this.setting = await service.getAllPluginSettings();
     }
 
     /**
-     * 返回全局设置和插件设置
+     * 返回当前插件可见设置快照：global.* + {pluginId}.*。
      */
     async getSnapshot(pluginId: string): Promise<Record<string, unknown>> {
         await this.ensureLoaded();
         const result: Record<string, unknown> = {};
         const globalPrefix = 'global.';
         const pluginPrefix = `${pluginId}.`;
+
         for (const key in this.setting) {
             if (key.startsWith(globalPrefix) || key.startsWith(pluginPrefix)) {
                 result[key] = this.setting[key];
@@ -48,13 +51,6 @@ export class PluginSettingService {
         return this.setting[globalKey] as T | undefined;
     }
 
-    /**
-     * 兼容命名：set 是 persist 的语义别名，方便上层 API 直接调用。
-     */
-    async set(pluginId: string, key: string, value: unknown): Promise<void> {
-        await this.persist(pluginId, key, value);
-    }
-
     async persist(pluginId: string, key: string, value: unknown): Promise<void> {
         await this.ensureLoaded();
         const scopedKey = `${pluginId}.${key}`;
@@ -66,6 +62,6 @@ export class PluginSettingService {
             console.error(`[PluginSetting] Failed to persist ${scopedKey}`, error);
         }
 
-        this.pluginEventBus.emit("setting.changed", { pluginId, key, value });
+        this.pluginEventBus.emit('setting.changed', { pluginId, key, value });
     }
 }

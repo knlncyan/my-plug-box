@@ -1,4 +1,4 @@
-﻿import type { ViewMeta } from '../domain/protocol/plugin-catalog.protocol';
+﻿import type { ViewMeta } from '../../domain/protocol/plugin-catalog.protocol';
 
 /**
  * 视图状态服务：
@@ -20,10 +20,6 @@ export class PluginViewService {
     if (!this.activeViewId) {
       this.activeViewId = this.views[0]?.id ?? null;
     }
-  }
-
-  getViews(): ViewMeta[] {
-    return this.views;
   }
 
   getActiveViewId(): string | null {

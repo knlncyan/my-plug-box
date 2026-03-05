@@ -1,15 +1,14 @@
-﻿import { SimpleContainer } from '../ioc/SimpleContainer';
-import { PluginActivationService } from '../service/PluginActivationService';
-import { PluginAssetCatalogService } from '../service/PluginAssetCatalogService';
-import { PluginCommandService } from '../service/PluginCommandService';
-import { PluginRuntimeService } from '../service/PluginRuntimeService';
-import { PluginSettingService } from '../service/PluginSettingService';
-import { PluginStorageService } from '../service/PluginStorageService';
-import { PluginViewService } from '../service/PluginViewService';
-import { WorkerSandboxService } from '../service/WorkerSandboxService';
+﻿import { SimpleContainer } from './ioc/SimpleContainer';
+import { PluginActivationService } from './service/PluginActivationService';
+import { PluginAssetCatalogService } from './service/PluginAssetCatalogService';
+import { PluginCommandService } from './service/PluginCommandService';
+import { PluginRuntimeService } from './service/PluginRuntimeService';
+import { PluginSettingService } from './service/PluginSettingService';
+import { PluginStorageService } from './service/PluginStorageService';
+import { PluginViewService } from './service/PluginViewService';
+import { WorkerSandboxService } from './service/WorkerSandboxService';
 import type { CapabilityById, CapabilityFactory } from '../domain/capability';
 import { CapabilityRegistry } from './CapabilityRegistry';
-import { PluginApiRegistry } from './PluginApiRegistry';
 import { PluginDisposable } from './PluginDisposable';
 import { PluginEventBus } from './PluginEventBus';
 
@@ -75,21 +74,6 @@ container.registerSingleton(
         })
 );
 
-// 插件 API 注册中心（当前为能力聚合层）
-container.registerSingleton(
-    PluginApiRegistry,
-    () =>
-        new PluginApiRegistry({
-            capabilityRegistry: container.resolve(CapabilityRegistry),
-            pluginCommandService: container.resolve(PluginCommandService),
-            pluginViewService: container.resolve(PluginViewService),
-            pluginSettingService: container.resolve(PluginSettingService),
-            pluginStorageService: container.resolve(PluginStorageService),
-            pluginEventBus: container.resolve(PluginEventBus),
-            pluginDisposable: container.resolve(PluginDisposable),
-        })
-);
-
 // 运行时编排服务
 container.registerSingleton(
     PluginRuntimeService,
@@ -100,6 +84,7 @@ container.registerSingleton(
             pluginCommandService: container.resolve(PluginCommandService),
             pluginViewService: container.resolve(PluginViewService),
             workerSandboxService: container.resolve(WorkerSandboxService),
+            pluginDisposable: container.resolve(PluginDisposable),
         })
 );
 

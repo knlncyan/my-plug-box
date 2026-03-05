@@ -7,11 +7,11 @@
     PluginWorkerRecord,
     WorkerRequestMessage,
     WorkerResponseMessage,
-} from '../domain/worker';
-import type { ExecuteCommandPipelineOptions } from '../domain/runtime';
-import { CapabilityRegistry } from '../core/CapabilityRegistry';
-import { PluginDisposable } from '../core/PluginDisposable';
-import { PluginEventBus } from '../core/PluginEventBus';
+} from '../../domain/worker';
+import type { ExecuteCommandPipelineOptions } from '../../domain/runtime';
+import { CapabilityRegistry } from '../CapabilityRegistry';
+import { PluginDisposable } from '../PluginDisposable';
+import { PluginEventBus } from '../PluginEventBus';
 import { PluginActivationService } from './PluginActivationService';
 import { PluginSettingService } from './PluginSettingService';
 import { PluginStorageService } from './PluginStorageService';
@@ -57,10 +57,8 @@ export class WorkerSandboxService {
         this.registerBuiltinWorkerMethods();
 
         // 全局释放：应用退出或运行时重建时回收全部 Worker。
-        deps.pluginDisposable.add('__global__', () => {
-            for (const pluginId of Array.from(this.workers.keys())) {
-                void this.disposePlugin(pluginId);
-            }
+        deps.pluginDisposable.add('__global__', async () => {
+            await this.disposeAll();
         });
 
         // 同步设置变更到对应插件 Worker，驱动 settings.onChange 回调。
@@ -91,20 +89,6 @@ export class WorkerSandboxService {
      */
     setViewActivator(activate: (viewId: string) => void): void {
         this.viewActivator = activate;
-    }
-
-    /**
-     * 注册 Worker -> Host 方法处理器。
-     * 返回值为注销函数，方便后续按需扩展能力。
-     */
-    registerWorkerMethod(method: string, handler: WorkerMethodHandler): () => void {
-        if (this.workerMethodHandlers.has(method)) {
-            throw new Error(`Duplicated worker method handler: ${method}`);
-        }
-        this.workerMethodHandlers.set(method, handler);
-        return () => {
-            this.workerMethodHandlers.delete(method);
-        };
     }
 
     async activate(pluginId: string): Promise<void> {
@@ -228,6 +212,20 @@ export class WorkerSandboxService {
         });
     }
 
+    /**
+     * 注册 Worker -> Host 方法处理器。
+     * 返回值为注销函数，方便后续按需扩展能力。
+     */
+    private registerWorkerMethod(method: string, handler: WorkerMethodHandler): () => void {
+        if (this.workerMethodHandlers.has(method)) {
+            throw new Error(`Duplicated worker method handler: ${method}`);
+        }
+        this.workerMethodHandlers.set(method, handler);
+        return () => {
+            this.workerMethodHandlers.delete(method);
+        };
+    }
+
     private asRecord(value: unknown): Record<string, unknown> {
         if (!value || typeof value !== 'object') {
             return {};
@@ -243,8 +241,8 @@ export class WorkerSandboxService {
             throw new Error(`Cannot create sandbox for inactive plugin: ${pluginId}`);
         }
 
-        // Worker 入口文件在 src/core/worker.ts。
-        const worker = new Worker(new URL('../core/worker.ts', import.meta.url), {
+        // Worker 入口文件在 src/core/sandbox/worker.ts。
+        const worker = new Worker(new URL('../sandbox/worker.ts', import.meta.url), {
             type: 'module',
         });
 
@@ -414,5 +412,20 @@ export class WorkerSandboxService {
 
         record.worker.terminate();
         this.workers.delete(pluginId);
+    }
+
+    /**
+     * 统一释放全部插件 Worker（优先走 deactivate，确保插件有机会执行清理逻辑）。
+     */
+    private async disposeAll(): Promise<void> {
+        const pluginIds = Array.from(this.workers.keys());
+        for (const pluginId of pluginIds) {
+            try {
+                await this.deactivate(pluginId);
+            } catch (error) {
+                console.error(`[Sandbox] Failed to deactivate worker ${pluginId}:`, error);
+                await this.disposePlugin(pluginId);
+            }
+        }
     }
 }

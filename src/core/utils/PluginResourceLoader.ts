@@ -30,7 +30,7 @@ export function getBuiltinPluginManifests(): BuiltinPluginManifest[] {
  */
 export function resolvePluginModuleKey(pluginId: string): string {
     const folder = pluginId.replace(/^builtin\./, '');
-    return `../plugins/${folder}/index.ts`;
+    return `../../plugins/${folder}/index.ts`;
 }
 
 /**
@@ -45,7 +45,7 @@ export function getPluginModuleLoaderById(pluginId: string): PluginModuleLoader 
  */
 export function resolvePluginViewModuleKey(componentPath: string): string {
     const normalized = componentPath.replace(/\\/g, '/').replace(/^builtin\./, '');
-    return `../plugins/${normalized}.tsx`;
+    return `../../plugins/${normalized}.tsx`;
 }
 
 /**

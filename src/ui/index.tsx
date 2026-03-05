@@ -2,8 +2,8 @@
  * Main workbench layout that displays plugin views and command launchers.
  */
 import { useCallback, useMemo, useState } from 'react';
-import { useCoreRuntime } from '../../core';
-import { PluginViewLoader } from '../plugin/PluginRenderer';
+import { useCoreRuntime } from '../core';
+import { PluginViewLoader } from './plugin/PluginRenderer';
 
 export default function WorkbenchLayout() {
     const { loading, ready, error, views, plugins, commands, activeViewId, executeCommand, setActiveView } =
@@ -94,8 +94,8 @@ export default function WorkbenchLayout() {
                                                     <button
                                                         onClick={() => selectView(view.id)}
                                                         className={`w-full rounded px-2 py-1.5 text-left text-sm transition ${activeViewId === view.id
-                                                                ? 'bg-slate-900 text-white'
-                                                                : 'text-slate-700 hover:bg-slate-100'
+                                                            ? 'bg-slate-900 text-white'
+                                                            : 'text-slate-700 hover:bg-slate-100'
                                                             }`}
                                                     >
                                                         {view.title}

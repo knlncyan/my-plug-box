@@ -1,7 +1,6 @@
-import { WorkbenchLayout } from './ui';
+import WorkbenchLayout from './ui';
 
-function App() {
-  return <WorkbenchLayout />;
-}
 
-export default App;
+export default function App() {
+  return <WorkbenchLayout />
+};

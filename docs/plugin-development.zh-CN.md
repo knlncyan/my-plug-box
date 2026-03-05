@@ -1,6 +1,6 @@
 ﻿# 插件开发手册（中文）
 
-本文档面向本项目的插件开发者，覆盖从创建插件到扩展宿主能力的完整流程。
+本文档面向本项目插件开发者，覆盖从创建插件到扩展宿主能力的基本流程。
 
 ## 1. 快速认知
 
@@ -75,15 +75,17 @@ import type { BuiltinPluginModule } from '../../domain/protocol/plugin-runtime.p
 const plugin: BuiltinPluginModule = {
   pluginId: 'builtin.my-plugin',
   activate: async (api) => {
-    const launch = ((await api.storage.get<number>('launch_count')) ?? 0) + 1;
-    await api.storage.set('launch_count', launch);
+    const storage = api.get('storage');
+    const launch = ((await storage.get<number>('launch_count')) ?? 0) + 1;
+    await storage.set('launch_count', launch);
   },
   deactivate: () => {
     console.info('[my-plugin] deactivated');
   },
   commands: {
     'myPlugin.open': (context) => {
-      context.activateView('myPlugin.main');
+      const views = context.api.get('views');
+      views.activate('myPlugin.main');
     },
   },
 };
@@ -95,23 +97,23 @@ export default plugin;
 
 在 `activate/deactivate/command handler` 中可使用：
 
-- `api.commands.execute(commandId, ...args)`：执行命令（支持跨插件）
-- `api.views.activate(viewId)`：切换视图
-- `api.events.emit/on`：事件发布与订阅
-- `api.settings.get/set/onChange`：插件设置（按 `pluginId.key` 命名空间）
-- `api.storage.get/set`：插件私有存储
-- `api.capabilities.call(method, params)`：通用 RPC 风格调用
-- `api.capabilities.get('capabilityId')`：获取强类型能力对象
+- `api.get('commands')`：命令能力（执行命令）
+- `api.get('views')`：视图能力（切换视图）
+- `api.get('events')`：事件能力（发布/订阅）
+- `api.get('settings')`：设置能力（按 `pluginId.key` 命名空间）
+- `api.get('storage')`：插件私有存储能力
+- `api.call(method, params)`：通用 RPC 风格调用
 
 ## 6. 命令上下文 CommandExecutionContext
 
-命令 handler 第一个参数是 `context`，常用能力：
+命令 handler 第一个参数是 `context`，当前只保留：
 
-- `context.activateView(viewId)`
-- `context.executeCommand(commandId, ...args)`
-- `context.api`（等价于 `PluginHostAPI`）
+- `context.api`（`PluginHostAPI`）
 
-系统有命令链防循环检测（如 `A -> B -> A` 会抛错）。
+说明：
+
+- 命令链防循环在运行时内核处理（如 `A -> B -> A` 会抛错）。
+- 命令内要调用其他命令，请使用 `context.api.get('commands').execute(...)`。
 
 ## 7. 插件视图开发
 
@@ -119,7 +121,7 @@ export default plugin;
 
 建议：
 
-- 不依赖全局宿主 DOM。
+- 不依赖宿主全局 DOM。
 - 通过运行时 API 完成插件协作，不直接耦合宿主内部实现。
 
 ## 8. 扩展宿主能力（推荐方式）
@@ -152,7 +154,7 @@ registerCapability('files', ({ pluginId }) => ({
 ### 8.2 插件侧使用
 
 ```ts
-const files = api.capabilities.get('files');
+const files = api.get('files');
 await files.openFolder('E:/knln/Desktop');
 ```
 
@@ -160,7 +162,7 @@ await files.openFolder('E:/knln/Desktop');
 
 1. 新建插件目录与 `plugin.json`。
 2. 实现 `index.ts` 与视图组件。
-3. 在命令面板或侧栏触发命令做联调。
+3. 在命令面板或侧栏触发命令联调。
 4. 必要时新增能力并通过 `registerCapability` 注册。
 5. 运行 `pnpm tsc --noEmit` 做类型验证。
 

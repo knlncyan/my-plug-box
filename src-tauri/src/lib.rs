@@ -2,6 +2,7 @@ use crate::core::PluginManager;
 use std::sync::Mutex;
 use tauri::Manager;
 
+mod utils;
 mod commands;
 mod core;
 
@@ -9,19 +10,14 @@ mod core;
 pub fn run() {
     tauri::Builder::default()
         .setup(|app| {
-            // 1. 创建管理器
+            // 1.1 创建管理器
             let mut manager = PluginManager::new();
-
-            // 2. 注入 AppHandle (关键！)
             manager.set_app_handle(app.handle().clone());
-
-            // 3. (可选) 注册内置 Rust 插件
-            // let manifest = PluginManifest { ... };
-            // let module = MyNativePlugin::new();
-            // manager.register_builtin(manifest, module);
-
-            // 4. 交给 Tauri 管理
+            // 1.2 交给 Tauri 管理
             app.manage(Mutex::new(manager));
+
+            // 2. 创建系统托盘
+            utils::tray::create_tray(app.handle())?;
 
             Ok(())
         })

@@ -5,8 +5,8 @@
  * 2) 视图通过 postMessage 向主线程请求 runtime 能力。
  */
 import { Component, type ErrorInfo, type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
-import { coreRuntime } from '../../core';
-import type { ViewMeta } from '../../domain/protocol/plugin-catalog.protocol';
+import { coreRuntime } from '.';
+import type { ViewMeta } from '../domain/protocol/plugin-catalog.protocol';
 import type {
     PluginViewActivateForViewPayload,
     PluginViewExecuteCommandPayload,
@@ -14,7 +14,7 @@ import type {
     PluginViewRuntimeResponseMessage,
     PluginViewRuntimeSnapshotMessage,
     PluginViewSetActiveViewPayload,
-} from '../../domain/protocol/plugin-view-runtime-bridge.protocol';
+} from '../domain/protocol/plugin-view-runtime-bridge.protocol';
 
 interface Props {
     view: ViewMeta;

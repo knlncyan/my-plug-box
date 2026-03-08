@@ -1,7 +1,9 @@
 import { useLayoutStore } from "@/store/useLayoutStore";
 import { useCoreRuntime } from "@/core";
-import { LayoutGrid, PanelLeftClose, PanelLeftOpen, Search, Tags } from "lucide-react";
-import { useCallback, useMemo, useState } from "react";
+import { LayoutGrid, Minus, PanelLeftClose, PanelLeftOpen, Search, Tags, X } from "lucide-react";
+import { useCallback, useMemo, useRef, useState } from "react";
+import { Input } from "@/components/ui/input";
+import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
 
 export default () => {
     const { loading, ready, error, views, plugins, commands, activeViewId, executeCommand, setActiveView } =
@@ -9,6 +11,8 @@ export default () => {
     const [commandError, setCommandError] = useState<string | null>(null);
     const asideHidden = useLayoutStore(state => state.asideHidden);
     const toggleAside = useLayoutStore(state => state.toggleAside);
+    const asideActivatedKey = useLayoutStore(state => state.asideActivatedKey);
+    const asideActivateKey = useLayoutStore(state => state.asideActivateKey);
 
     const selectView = useCallback(
         (viewId: string) => {
@@ -62,43 +66,81 @@ export default () => {
 
     const commandCount = commands.length;
 
+    // plugs被选中
+    const handlePlugsSelected = () => {
+        asideActivateKey('plugs');
+        if (asideHidden) toggleAside();
+    }
+
+    // search被选中
+    const handleSearchSelected = () => {
+        asideActivateKey('search');
+        if (asideHidden) toggleAside();
+    }
+
+    // tags被选中
+    const handleTagsSelected = () => {
+        asideActivateKey('tags');
+        if (asideHidden) toggleAside();
+    }
+
     return (
-        <div className={`flex flex-col ${asideHidden ? 'w-10' : 'w-[25%] max-w-[300px]'} border-r border-neutral-200 bg-white`}>
+        <div className={`flex flex-col ${asideHidden ? 'w-10' : 'w-[25%] max-w-75'} border-r border-neutral-200 bg-white`}>
 
             <div className={`flex ${asideHidden && 'flex-col'}  p-1`}>
-                <button
-                    // onClick={minimizeToTray}
-                    className="flex h-8 w-8 items-center justify-center rounded hover:bg-black/10"
-                >
-                    <LayoutGrid className="h-4 w-4 " />
-                </button>
-                <button
-                    // onClick={minimizeToTray}
-                    className="flex h-8 w-8 items-center justify-center rounded hover:bg-black/10"
-                >
-                    <Search className="h-4 w-4 " />
-                </button>
-                <button
-                    // onClick={minimizeToTray}
-                    className="flex h-8 w-8 items-center justify-center rounded hover:bg-black/10"
-                >
-                    <Tags className="h-4 w-4 " />
-                </button>
-                {asideHidden ? (
-                    <button
-                        onClick={toggleAside}
-                        className="flex ml-auto h-8 w-8 items-center justify-center rounded hover:bg-black/10"
-                    >
-                        <PanelLeftOpen className="h-4 w-4 " />
-                    </button>
-                ) : (
-                    <button
-                        onClick={toggleAside}
-                        className="flex ml-auto h-8 w-8 items-center justify-center rounded hover:bg-black/10"
-                    >
-                        <PanelLeftClose className="h-4 w-4 " />
-                    </button>
-                )}
+                {asideActivatedKey == 'search'
+                    ? <>
+                        <InputGroup className="h-8">
+                            <InputGroupInput placeholder="Search..." autoFocus />
+                            <InputGroupAddon>
+                                <Search />
+                            </InputGroupAddon>
+                            <InputGroupAddon align="inline-end" >
+                                <div
+                                    onClick={() => asideActivateKey('plugs')}
+                                    className="flex h-8 w-8 pl-[-8px] cursor-pointer items-center justify-center"
+                                >
+                                    <X className="h-4 w-4" />
+                                </div>
+
+                            </InputGroupAddon>
+                        </InputGroup>
+                    </>
+                    : <>
+                        <button
+                            onClick={handlePlugsSelected}
+                            className={`flex h-8 w-8 cursor-pointer items-center justify-center rounded ${asideActivatedKey == 'plugs' ? 'bg-primary-700  text-white' : 'hover:bg-black/10'}`}
+                        >
+                            <LayoutGrid className="h-4 w-4 " />
+                        </button>
+                        <button
+                            onClick={handleSearchSelected}
+                            className="flex h-8 w-8 cursor-pointer items-center justify-center rounded hover:bg-black/10"
+                        >
+                            <Search className="h-4 w-4 " />
+                        </button>
+                        <button
+                            onClick={handleTagsSelected}
+                            className={`flex h-8 w-8 cursor-pointer items-center justify-center rounded ${asideActivatedKey == 'tags' ? 'bg-primary-700  text-white' : 'hover:bg-black/10'}`}
+                        >
+                            <Tags className="h-4 w-4 " />
+                        </button>
+                        {asideHidden ? (
+                            <button
+                                onClick={() => { asideActivateKey('plugs'); toggleAside(); }}
+                                className="flex ml-auto h-8 w-8 cursor-pointer items-center justify-center rounded hover:bg-black/10"
+                            >
+                                <PanelLeftOpen className="h-4 w-4 " />
+                            </button>
+                        ) : (
+                            <button
+                                onClick={() => { asideActivateKey('none'); toggleAside(); }}
+                                className="flex ml-auto h-8 w-8 cursor-pointer items-center justify-center rounded hover:bg-black/10"
+                            >
+                                <PanelLeftClose className="h-4 w-4 " />
+                            </button>
+                        )}
+                    </>}
             </div>
             {!asideHidden && (
                 <>

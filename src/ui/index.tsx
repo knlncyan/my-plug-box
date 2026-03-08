@@ -3,7 +3,7 @@
  */
 import { useCallback, useMemo, useState } from 'react';
 import { useCoreRuntime } from '../core';
-import { PluginViewLoader } from './plugin/PluginRenderer';
+import { PluginViewLoader } from '../core/PluginRenderer';
 import TopBar from '@/ui/components/TopBar';
 import Aside from './components/Aside';
 

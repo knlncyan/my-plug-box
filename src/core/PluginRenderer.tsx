@@ -6,9 +6,8 @@
  */
 import { Component, type ErrorInfo, type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { coreRuntime } from '.';
-import type { ViewMeta } from '../domain/protocol/plugin-catalog.protocol';
+import type { PluginViewManifest } from '../domain/protocol/plugin-catalog.protocol';
 import type {
-    PluginViewActivateForViewPayload,
     PluginViewExecuteCommandPayload,
     PluginViewRuntimeRequestMessage,
     PluginViewRuntimeResponseMessage,
@@ -17,7 +16,7 @@ import type {
 } from '../domain/protocol/plugin-view-runtime-bridge.protocol';
 
 interface Props {
-    view: ViewMeta;
+    view: PluginViewManifest;
 }
 
 interface ErrorBoundaryProps {
@@ -68,11 +67,10 @@ function asRecord(value: unknown): Record<string, unknown> {
     return value as Record<string, unknown>;
 }
 
-function buildSandboxViewUrl(view: ViewMeta): string {
+function buildSandboxViewUrl(view: PluginViewManifest): string {
     const url = new URL('/plugin-view-sandbox.html', window.location.origin);
     url.searchParams.set('viewId', view.id);
-    url.searchParams.set('pluginId', view.plugin_id);
-    url.searchParams.set('componentPath', view.component_path);
+    url.searchParams.set('pluginId', view.pluginId);
     url.searchParams.set('props', JSON.stringify(view.props ?? {}));
     return url.toString();
 }
@@ -83,7 +81,7 @@ function PluginSandboxFrame({ view }: Props) {
 
     const sandboxUrl = useMemo(
         () => buildSandboxViewUrl(view),
-        [view.id, view.plugin_id, view.component_path, JSON.stringify(view.props ?? {})]
+        [view.id, view.pluginId, JSON.stringify(view.props ?? {})]
     );
 
     useEffect(() => {
@@ -187,20 +185,6 @@ function PluginSandboxFrame({ view }: Props) {
                         });
                         return;
                     }
-                    case 'activateForView': {
-                        const payload = asRecord(message.payload) as unknown as PluginViewActivateForViewPayload;
-                        if (typeof payload.viewId !== 'string' || payload.viewId.length === 0) {
-                            throw new Error('runtime bridge activateForView missing viewId');
-                        }
-                        await coreRuntime.activateForView(payload.viewId);
-                        postResponse(targetWindow, {
-                            type: 'plugin-view-runtime-response',
-                            requestId: message.requestId,
-                            success: true,
-                            result: null,
-                        });
-                        return;
-                    }
                     default:
                         throw new Error(`runtime bridge unsupported action: ${message.action}`);
                 }
@@ -258,7 +242,7 @@ function PluginSandboxFrame({ view }: Props) {
 
 export function PluginViewLoader({ view }: Props) {
     return (
-        <PluginViewErrorBoundary pluginId={view.plugin_id} viewId={view.id}>
+        <PluginViewErrorBoundary pluginId={view.pluginId} viewId={view.id}>
             <PluginSandboxFrame view={view} />
         </PluginViewErrorBoundary>
     );

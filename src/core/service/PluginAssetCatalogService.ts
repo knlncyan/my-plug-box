@@ -3,8 +3,10 @@ import service from '../../api/plugin.service';
 import {
     getBuiltinPluginManifests,
     getPluginModuleLoaderById,
+    getPluginViewLoaderById,
     resolvePluginModuleKey,
-} from '../utils/PluginResourceLoader';
+    resolvePluginViewModuleKey,
+} from '../utils/pluginResourceLoader';
 
 /**
  * 插件资源目录服务：
@@ -42,20 +44,18 @@ export class PluginAssetCatalogService {
                 version: manifest.version,
                 description: manifest.description,
                 activationEvents: manifest.activationEvents ?? [],
+                view: manifest.view
+                    ? {
+                        ...manifest.view,
+                        pluginId: manifest.id,
+                    }
+                    : undefined,
             });
-
-            for (const view of manifest.views ?? []) {
-                await service.registerView({
-                    ...view,
-                    plugin_id: manifest.id,
-                    props: view.props ?? {},
-                });
-            }
 
             for (const command of manifest.commands ?? []) {
                 await service.registerCommand({
                     ...command,
-                    plugin_id: manifest.id,
+                    pluginId: manifest.id,
                 });
             }
         }
@@ -94,6 +94,20 @@ export class PluginAssetCatalogService {
                 throw new Error(
                     `Plugin id mismatch: manifest="${manifest.id}", module="${module.pluginId}" (${moduleKey})`
                 );
+            }
+
+            if (manifest.view) {
+                const viewModuleKey = resolvePluginViewModuleKey(manifest.id);
+                const viewLoader = getPluginViewLoaderById(manifest.id);
+
+                if (!viewLoader) {
+                    throw new Error(`Plugin view module not found for manifest "${manifest.id}": ${viewModuleKey}`);
+                }
+
+                const loadedView = await viewLoader();
+                if (!loadedView.default) {
+                    throw new Error(`Plugin view default export missing: ${viewModuleKey}`);
+                }
             }
         }
 

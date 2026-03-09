@@ -9,26 +9,27 @@ export interface ApiResponse<T> {
   data?: T | null;
 }
 
+export interface PluginViewManifest {
+  id: string;
+  title: string;
+  pluginId: string;
+  // component_path: string;
+  props: Record<string, unknown>;
+}
+
 export interface PluginManifestDto {
   id: string;
   name: string;
   version: string;
   description?: string;
   activationEvents?: string[];
-}
-
-export interface ViewMeta {
-  id: string;
-  title: string;
-  plugin_id: string;
-  component_path: string;
-  props: Record<string, unknown>;
+  view?: PluginViewManifest;
 }
 
 export interface CommandMeta {
   id: string;
   description: string;
-  plugin_id: string;
+  pluginId: string;
 }
 
 export interface PluginSummary {
@@ -38,21 +39,10 @@ export interface PluginSummary {
   status: string;
   error?: string;
   description?: string;
+  view?: PluginViewManifest
 }
 
-export interface BuiltinViewContribution {
-  id: string;
-  title: string;
-  component_path: string;
-  props?: Record<string, unknown>;
-}
-
-export interface BuiltinCommandContribution {
-  id: string;
-  description: string;
-}
-
-export interface BuiltinPluginManifest extends PluginManifestDto {
-  views?: BuiltinViewContribution[];
-  commands?: BuiltinCommandContribution[];
+export interface BuiltinPluginManifest extends Omit<PluginManifestDto, "view"> {
+  view?: Omit<PluginViewManifest, "pluginId">
+  commands?: Omit<CommandMeta, "pluginId">[];
 }

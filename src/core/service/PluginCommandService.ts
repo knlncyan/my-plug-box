@@ -7,13 +7,12 @@ import service from '../../api/plugin.service';
 import type { CommandMeta } from '../../domain/protocol/plugin-catalog.protocol';
 import type { ExecuteCommandPipelineOptions } from '../../domain/runtime';
 import { PluginActivationService } from './PluginActivationService';
-import { PluginViewService } from './PluginViewService';
 import { WorkerSandboxService } from './WorkerSandboxService';
 
 interface PluginCommandServiceDeps {
     pluginActivationService: PluginActivationService;
     workerSandboxService: WorkerSandboxService;
-    pluginViewService: PluginViewService;
+    // pluginViewService: PluginViewService;
 }
 
 export class PluginCommandService {
@@ -64,7 +63,7 @@ export class PluginCommandService {
         }
         const nextTrace = [...trace, commandId];
 
-        const ownerPluginId = commandMeta.plugin_id;
+        const ownerPluginId = commandMeta.pluginId;
         if (!this.deps.pluginActivationService.isPluginActivated(ownerPluginId)) {
             if (!this.deps.pluginActivationService.canActivateForCommand(ownerPluginId, commandId)) {
                 throw new Error(
@@ -82,8 +81,8 @@ export class PluginCommandService {
             nextTrace
         );
 
-        // 命令返回 viewId 时，自动切换目标视图。
-        if (typeof result === 'string' && options.activateView && this.deps.pluginViewService.hasView(result)) {
+        // 命令返回 pluginId 时，自动切换目标插件视图。
+        if (typeof result === 'string' && options.activateView && this.deps.pluginActivationService.canActivateForView(result)) {
             options.activateView(result);
         }
 

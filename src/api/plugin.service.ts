@@ -11,7 +11,6 @@ import type {
   CommandMeta,
   PluginManifestDto,
   PluginSummary,
-  ViewMeta,
 } from '../domain/protocol/plugin-catalog.protocol';
 import {
   ApiInterceptorPipeline,
@@ -45,13 +44,6 @@ class PluginBackendService {
   */
   async registerPlugin(manifest: PluginManifestDto): Promise<void> {
     await this.invokeApi<void>('register_js_plugin', { manifest }, { allowWarning: true });
-  }
-
-  /**
-  * 注册视图元数据到后端。
-  */
-  async registerView(view: ViewMeta): Promise<void> {
-    await this.invokeApi<void>('register_view_meta', { view }, { allowWarning: true });
   }
 
   /**
@@ -89,14 +81,6 @@ class PluginBackendService {
   async listPlugins(): Promise<PluginSummary[]> {
     const response = await this.invokeApi<PluginSummary[]>('get_plugin_list');
     return this.unwrapData(response, 'get_plugin_list');
-  }
-
-  /**
-  * 获取已注册视图列表。
-  */
-  async listViews(): Promise<ViewMeta[]> {
-    const response = await this.invokeApi<ViewMeta[]>('get_registered_views');
-    return this.unwrapData(response, 'get_registered_views');
   }
 
   /**

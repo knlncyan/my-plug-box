@@ -3,15 +3,15 @@
   "name": "Welcome",
   "version": "1.0.0",
   "description": "Built-in welcome page plugin",
-  "activationEvents": ["onView:welcome.main", "onCommand:welcome.open"],
-  "views": [
-    {
-      "id": "welcome.main",
-      "title": "Welcome",
-      "component_path": "builtin.welcome/views/WelcomeView",
-      "props": {}
-    }
+  "activationEvents": [
+    "onView:welcome.main",
+    "onCommand:welcome.open"
   ],
+  "view": {
+    "id": "welcome.main",
+    "title": "Welcome",
+    "props": {}
+  },
   "commands": [
     {
       "id": "welcome.open",

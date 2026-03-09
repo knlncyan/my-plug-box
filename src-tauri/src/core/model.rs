@@ -5,11 +5,11 @@ use serde::{Deserialize, Serialize};
 // ==========================   一些插件元数据 =============================
 /// 视图元数据：描述一个插件贡献的页面
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ViewMeta {
-    pub id: String,               // 唯一 ID，如 "welcome.main"
-    pub title: String,            // 显示标题
-    pub plugin_id: String,        // 归属插件 ID
-    pub component_path: String,   // 前端组件路径标识 (如 "plugin-id/views/Name")
+pub struct PluginViewManifest {
+    pub id: String,    // 唯一 ID，如 "welcome.main"
+    pub title: String, // 显示标题
+    #[serde(default, rename = "pluginId")]
+    pub plugin_id: String, // 归属插件 ID
     pub props: serde_json::Value, // 传递给组件的初始参数
 }
 
@@ -18,6 +18,7 @@ pub struct ViewMeta {
 pub struct CommandMeta {
     pub id: String,
     pub description: String,
+    #[serde(default, rename = "pluginId")]
     pub plugin_id: String,
 }
 
@@ -30,6 +31,7 @@ pub struct PluginSummary {
     pub status: String, // "Registered", "Activated", "Error"
     pub error: Option<String>,
     pub description: Option<String>,
+    pub view: Option<PluginViewManifest>,
 }
 
 // ======================== 核心的插件数据结构 =============================
@@ -44,6 +46,7 @@ pub struct PluginManifest {
     pub description: Option<String>,
     #[serde(default, rename = "activationEvents")]
     pub activation_events: Vec<String>,
+    pub view: Option<PluginViewManifest>,
 }
 
 /**
@@ -77,8 +80,6 @@ pub struct PluginEntry {
     pub status: PluginStatus,
     // 生命周期钩子
     pub module: Box<dyn PluginActivation + Send>,
-    // 注册的视图
-    pub registered_views: Vec<ViewMeta>,
     // 注册的命令
     pub registered_commands: Vec<CommandMeta>,
 }

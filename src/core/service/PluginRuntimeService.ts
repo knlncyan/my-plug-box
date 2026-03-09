@@ -5,12 +5,12 @@ import type {
     ExecuteCommandPipelineOptions,
     PluginRuntimeSnapshot,
 } from '../../domain/runtime';
+import type { PluginSummary } from '../../domain/protocol/plugin-catalog.protocol';
 import { shouldActivateOnStartup } from '../utils/activateEventsUtils';
 import { PluginDisposable } from '../PluginDisposable';
 import { PluginActivationService } from './PluginActivationService';
 import { PluginAssetCatalogService } from './PluginAssetCatalogService';
 import { PluginCommandService } from './PluginCommandService';
-import { PluginViewService } from './PluginViewService';
 import { WorkerSandboxService } from './WorkerSandboxService';
 
 type Listener = () => void;
@@ -19,7 +19,7 @@ interface PluginRuntimeServiceDeps {
     pluginAssetCatalogService: PluginAssetCatalogService;
     pluginActivationService: PluginActivationService;
     pluginCommandService: PluginCommandService;
-    pluginViewService: PluginViewService;
+    // pluginViewService: PluginViewService;
     workerSandboxService: WorkerSandboxService;
     pluginDisposable: PluginDisposable;
 }
@@ -36,7 +36,6 @@ export class PluginRuntimeService {
         error: null,
         activeViewId: null,
         plugins: [],
-        views: [],
         commands: [],
     };
 
@@ -52,8 +51,8 @@ export class PluginRuntimeService {
             (commandId: string, options: ExecuteCommandPipelineOptions, ...args: unknown[]) =>
                 this.executeCommandInternal(commandId, options, ...args)
         );
-        this.deps.workerSandboxService.setViewActivator((viewId: string) => {
-            this.setActiveView(viewId);
+        this.deps.workerSandboxService.setViewActivator((pluginId: string) => {
+            this.setActiveView(pluginId);
         });
     }
 
@@ -87,34 +86,106 @@ export class PluginRuntimeService {
         return this.shutdownPromise;
     };
 
+    // setActiveView = (pluginId: string | null): void => {
+    //     if (!this.deps.pluginViewService.setActiveView(viewId)) {
+    //         this.patch({ error: `View not found: ${String(viewId)}` });
+    //         return;
+    //     }
+
+    //     this.patch({ activeViewId: this.deps.pluginViewService.getActiveViewId(), error: null });
+    //     if (viewId !== null) {
+    //         void this.activateForView(viewId);
+    //     }
+    // };
+
     setActiveView = (viewId: string | null): void => {
-        if (!this.deps.pluginViewService.setActiveView(viewId)) {
+        if (viewId === null) {
+            this.patch({ activeViewId: null, error: null });
+            return;
+        }
+
+        const pluginId = this.resolvePluginId(viewId);
+        if (!pluginId) {
             this.patch({ error: `View not found: ${String(viewId)}` });
             return;
         }
 
-        this.patch({ activeViewId: this.deps.pluginViewService.getActiveViewId(), error: null });
-        if (viewId !== null) {
-            void this.activateForView(viewId);
-        }
-    };
-
-    activateForView = async (viewId: string): Promise<void> => {
-        const view = this.snapshot.views.find((candidate) => candidate.id === viewId);
-        if (!view) return;
-
-        const pluginId = view.plugin_id;
-        if (this.deps.pluginActivationService.isPluginActivated(pluginId)) return;
-        if (!this.deps.pluginActivationService.canActivateForView(pluginId, viewId)) {
-            this.patch({
-                error: `Plugin "${pluginId}" is not configured for view activation: ${viewId}`,
-            });
+        const resolvedViewId = this.resolveViewId(pluginId);
+        if (!resolvedViewId) {
+            this.patch({ error: `Plugin "${pluginId}" has no view entry.` });
             return;
         }
 
-        await this.activatePluginWithHooks(pluginId);
-        await this.refreshAll();
+        if (!this.deps.pluginActivationService.isPluginActivated(pluginId)) {
+            if (!this.deps.pluginActivationService.canActivateForView(pluginId)) {
+                this.patch({
+                    error: `Plugin "${pluginId}" is not configured for view activation: ${resolvedViewId}`,
+                });
+                return;
+            }
+
+            void this.activatePluginWithHooks(pluginId)
+                .then(() => this.refreshAll())
+                .then(() => {
+                    this.patch({ activeViewId: this.resolveViewId(pluginId), error: null });
+                })
+                .catch((error) => {
+                    this.patch({ error: String(error) });
+                });
+            return;
+        }
+
+        this.patch({ activeViewId: resolvedViewId, error: null });
     };
+
+    // ============================= 下面是私有方法 =================================================
+
+    private resolvePluginId(target: string): string | null {
+        const plugin = this.snapshot.plugins.find((candidate) => candidate.id === target);
+        if (plugin) {
+            return plugin.id;
+        }
+
+        const pluginByViewId = this.snapshot.plugins.find((candidate) => candidate.view?.id === target);
+        if (pluginByViewId) {
+            return pluginByViewId.id;
+        }
+
+        return this.deps.pluginActivationService.resolvePluginId(target);
+    }
+
+    private resolveViewId(pluginId: string): string | null {
+        const viewId = this.snapshot.plugins.find((candidate) => candidate.id === pluginId)?.view?.id;
+        if (viewId) {
+            return viewId;
+        }
+
+        return this.deps.pluginActivationService.getViewIdByPluginId(pluginId);
+    }
+
+    private resolveActiveViewId(plugins: PluginSummary[]): string | null {
+        const currentActiveViewId = this.snapshot.activeViewId;
+        const currentPlugin = currentActiveViewId
+            ? plugins.find((candidate) => candidate.view?.id === currentActiveViewId)
+            : null;
+
+        if (currentPlugin && /^activated$/i.test(currentPlugin.status) && currentPlugin.view?.id) {
+            return currentPlugin.view.id;
+        }
+
+        const firstActivatedWithView = plugins.find(
+            (candidate) => /^activated$/i.test(candidate.status) && !!candidate.view?.id
+        );
+        if (firstActivatedWithView?.view?.id) {
+            return firstActivatedWithView.view.id;
+        }
+
+        if (currentPlugin?.view?.id) {
+            return currentPlugin.view.id;
+        }
+
+        return plugins.find((candidate) => candidate.view?.id)?.view?.id ?? null;
+    }
 
     executeCommand = async (
         commandId: string,
@@ -133,7 +204,7 @@ export class PluginRuntimeService {
             commandId,
             {
                 ...options,
-                activateView: options.activateView ?? ((viewId: string) => this.setActiveView(viewId)),
+                activateView: options.activateView ?? this.setActiveView,
             },
             ...args
         );
@@ -185,7 +256,6 @@ export class PluginRuntimeService {
 
         this.deps.pluginActivationService.syncFromPluginList([]);
         this.deps.pluginCommandService.setCommandCatalog([]);
-        this.deps.pluginViewService.setViews([]);
         await this.deps.pluginDisposable.dispose('__global__');
 
         this.patch({
@@ -194,7 +264,6 @@ export class PluginRuntimeService {
             error: null,
             activeViewId: null,
             plugins: [],
-            views: [],
             commands: [],
         });
     }
@@ -232,28 +301,11 @@ export class PluginRuntimeService {
     private async ensureEventListeners(): Promise<void> {
         if (this.eventUnlisteners.length > 0) return;
 
-        const unlistenViews = await listen('views-registered', () => {
-            void this.refreshViewsOnly();
-        });
         const unlistenPluginStatus = await listen('plugin-status-changed', () => {
             void this.refreshPluginsAndCommandsAndHooks();
         });
 
-        this.eventUnlisteners.push(unlistenViews, unlistenPluginStatus);
-    }
-
-    private async refreshViewsOnly(): Promise<void> {
-        try {
-            const views = await service.listViews();
-            this.deps.pluginViewService.setViews(views);
-            this.patch({
-                views,
-                activeViewId: this.deps.pluginViewService.getActiveViewId(),
-                error: null,
-            });
-        } catch (error) {
-            this.patch({ error: String(error) });
-        }
+        this.eventUnlisteners.push(unlistenPluginStatus);
     }
 
     private async refreshPluginsAndCommandsAndHooks(): Promise<void> {
@@ -261,7 +313,12 @@ export class PluginRuntimeService {
             const [plugins, commands] = await Promise.all([service.listPlugins(), service.listCommands()]);
             this.deps.pluginActivationService.syncFromPluginList(plugins);
             this.deps.pluginCommandService.setCommandCatalog(commands);
-            this.patch({ plugins, commands, error: null });
+            this.patch({
+                plugins,
+                commands,
+                activeViewId: this.resolveActiveViewId(plugins),
+                error: null,
+            });
             await this.syncFrontendModuleState();
         } catch (error) {
             this.patch({ error: String(error) });
@@ -269,20 +326,17 @@ export class PluginRuntimeService {
     }
 
     private async refreshAll(): Promise<void> {
-        const [plugins, views, commands] = await Promise.all([
+        const [plugins, commands] = await Promise.all([
             service.listPlugins(),
-            service.listViews(),
             service.listCommands(),
         ]);
         this.deps.pluginActivationService.syncFromPluginList(plugins);
-        this.deps.pluginViewService.setViews(views);
         this.deps.pluginCommandService.setCommandCatalog(commands);
 
         this.patch({
             plugins,
-            views,
             commands,
-            activeViewId: this.deps.pluginViewService.getActiveViewId(),
+            activeViewId: this.resolveActiveViewId(plugins),
             error: null,
         });
     }

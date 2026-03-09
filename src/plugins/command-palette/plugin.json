@@ -10,14 +10,11 @@
     "onView:commandPalette.main",
     "onView:*"
   ],
-  "views": [
-    {
-      "id": "commandPalette.main",
-      "title": "Command Palette",
-      "component_path": "builtin.command-palette/views/CommandPaletteView",
-      "props": {}
-    }
-  ],
+  "view": {
+    "id": "commandPalette.main",
+    "title": "Command Palette",
+    "props": {}
+  },
   "commands": [
     {
       "id": "commandPalette.open",

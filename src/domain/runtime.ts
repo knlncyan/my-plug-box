@@ -1,11 +1,11 @@
-﻿import type { CommandMeta, PluginSummary, ViewMeta } from './protocol/plugin-catalog.protocol';
+﻿import type { CommandMeta, PluginSummary } from './protocol/plugin-catalog.protocol';
 
 /**
  * 命令执行可选参数：
  * - `activateView` 允许在命令返回视图 ID 时切换到该视图。
  */
 export interface ExecuteCommandOptions {
-    activateView?: (viewId: string) => void;
+    activateView?: (pluginId: string) => void;
 }
 
 /**
@@ -28,6 +28,5 @@ export interface PluginRuntimeSnapshot {
     error: string | null;
     activeViewId: string | null;
     plugins: PluginSummary[];
-    views: ViewMeta[];
     commands: CommandMeta[];
 }

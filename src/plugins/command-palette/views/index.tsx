@@ -18,7 +18,7 @@ export default function CommandPaletteView() {
             return (
                 command.id.toLowerCase().includes(normalized) ||
                 command.description.toLowerCase().includes(normalized) ||
-                command.plugin_id.toLowerCase().includes(normalized)
+                command.pluginId.toLowerCase().includes(normalized)
             );
         });
     }, [commands, query]);
@@ -67,7 +67,7 @@ export default function CommandPaletteView() {
                         >
                             <div>
                                 <div className="font-mono text-slate-900">{command.id}</div>
-                                <div className="text-xs text-slate-500">{command.plugin_id}</div>
+                                <div className="text-xs text-slate-500">{command.pluginId}</div>
                             </div>
                             <div className="text-slate-700">{command.description}</div>
                             <div>

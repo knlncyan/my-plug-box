@@ -51,7 +51,7 @@ export class WorkerSandboxService {
     private readonly workerMethodHandlers = new Map<string, WorkerMethodHandler>();
     private requestSerial = 0;
     private commandExecutor: CommandExecutor | null = null;
-    private viewActivator: ((viewId: string) => void) | null = null;
+    private viewActivator: ((pluginId: string) => void) | null = null;
 
     constructor(private readonly deps: WorkerSandboxServiceDeps) {
         this.registerBuiltinWorkerMethods();
@@ -87,7 +87,7 @@ export class WorkerSandboxService {
     /**
      * 注册“激活视图”回调（由 runtime 注入）。
      */
-    setViewActivator(activate: (viewId: string) => void): void {
+    setViewActivator(activate: (pluginId: string) => void): void {
         this.viewActivator = activate;
     }
 

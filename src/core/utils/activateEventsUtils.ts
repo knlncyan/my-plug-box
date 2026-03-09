@@ -36,12 +36,11 @@ export function shouldActivateForCommand(
  */
 export function shouldActivateForView(
     manifest: BuiltinPluginManifest,
-    viewId: string
 ): boolean {
     const events = eventsOf(manifest);
     if (events.length === 0) return true;
     return (
-        events.includes(`onView:${viewId}`) ||
+        events.includes(`onView:${manifest.view?.id}`) ||
         events.includes('onView:*') ||
         events.includes('onView')
     );

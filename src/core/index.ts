@@ -5,7 +5,7 @@ import { PluginCommandService } from './service/PluginCommandService';
 import { PluginRuntimeService } from './service/PluginRuntimeService';
 import { PluginSettingService } from './service/PluginSettingService';
 import { PluginStorageService } from './service/PluginStorageService';
-import { PluginViewService } from './service/PluginViewService';
+// import { PluginViewService } from './service/PluginViewService';
 import { WorkerSandboxService } from './service/WorkerSandboxService';
 import type { CapabilityById, CapabilityFactory } from '../domain/capability';
 import { CapabilityRegistry } from './CapabilityRegistry';
@@ -32,7 +32,7 @@ container.registerSingleton(CapabilityRegistry, () => new CapabilityRegistry());
 container.registerSingleton(PluginAssetCatalogService, () => new PluginAssetCatalogService());
 
 // 视图状态服务：维护视图目录与当前激活视图
-container.registerSingleton(PluginViewService, () => new PluginViewService());
+// container.registerSingleton(PluginViewService, () => new PluginViewService());
 
 // 设置服务：插件设置读取与持久化
 container.registerSingleton(
@@ -70,7 +70,7 @@ container.registerSingleton(
         new PluginCommandService({
             pluginActivationService: container.resolve(PluginActivationService),
             workerSandboxService: container.resolve(WorkerSandboxService),
-            pluginViewService: container.resolve(PluginViewService),
+            // pluginViewService: container.resolve(PluginViewService),
         })
 );
 
@@ -82,7 +82,7 @@ container.registerSingleton(
             pluginAssetCatalogService: container.resolve(PluginAssetCatalogService),
             pluginActivationService: container.resolve(PluginActivationService),
             pluginCommandService: container.resolve(PluginCommandService),
-            pluginViewService: container.resolve(PluginViewService),
+            // pluginViewService: container.resolve(PluginViewService),
             workerSandboxService: container.resolve(WorkerSandboxService),
             pluginDisposable: container.resolve(PluginDisposable),
         })

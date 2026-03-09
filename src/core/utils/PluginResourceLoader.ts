@@ -16,7 +16,7 @@ const manifestModules = import.meta.glob('../../plugins/*/plugin.json', {
 
 const pluginModuleLoaders = import.meta.glob('../../plugins/*/index.ts') as Record<string, PluginModuleLoader>;
 
-const pluginViewLoaders = import.meta.glob('../../plugins/**/views/*View.tsx') as Record<string, PluginViewLoader>;
+const pluginViewLoaders = import.meta.glob('../../plugins/**/views/index.tsx') as Record<string, PluginViewLoader>;
 
 /**
  * 获取全部内置插件 manifest 列表。
@@ -43,14 +43,14 @@ export function getPluginModuleLoaderById(pluginId: string): PluginModuleLoader 
 /**
  * 根据 component_path 解析插件视图模块 key。
  */
-export function resolvePluginViewModuleKey(componentPath: string): string {
-    const normalized = componentPath.replace(/\\/g, '/').replace(/^builtin\./, '');
-    return `../../plugins/${normalized}.tsx`;
+export function resolvePluginViewModuleKey(pluginId: string): string {
+    const normalized = pluginId.replace(/\\/g, '/').replace(/^builtin\./, '');
+    return `../../plugins/${normalized}/views/index.tsx`;
 }
 
 /**
- * 根据 component_path 获取插件视图 loader。
+ * 根据 pluginId 获取插件视图 loader。
  */
-export function getPluginViewLoaderByPath(componentPath: string): PluginViewLoader | undefined {
-    return pluginViewLoaders[resolvePluginViewModuleKey(componentPath)];
+export function getPluginViewLoaderById(pluginId: string): PluginViewLoader | undefined {
+    return pluginViewLoaders[resolvePluginViewModuleKey(pluginId)];
 }

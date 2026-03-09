@@ -5,7 +5,7 @@ use tauri::{AppHandle, Emitter};
 
 use crate::core::{
     ApiResponse, CommandMeta, PluginActivation, PluginContext, PluginEntry, PluginManifest,
-    PluginStatus, PluginSummary, ViewMeta,
+    PluginStatus, PluginSummary,
 };
 
 pub trait PluginManagerActivation {
@@ -14,7 +14,7 @@ pub trait PluginManagerActivation {
         manifest: PluginManifest,
         module: T,
     ) -> Result<ApiResponse<()>, String>;
-    fn register_view(&mut self, view: ViewMeta) -> Result<ApiResponse<()>, String>;
+    // fn register_view(&mut self, view: ViewMeta) -> Result<ApiResponse<()>, String>;
     fn register_command(&mut self, cmd: CommandMeta) -> Result<ApiResponse<()>, String>;
     fn activate_all(&mut self) -> Result<ApiResponse<()>, String>;
     fn deactivate(&mut self, plugin_id: &String) -> Result<ApiResponse<()>, String>;
@@ -138,17 +138,18 @@ impl PluginManager {
                     status: format!("{:?}", entry.status),
                     error: error_msg,
                     description: entry.manifest.description.clone(),
+                    view: entry.manifest.view.clone()
                 }
             })
             .collect()
     }
 
-    pub fn get_all_views(&self) -> Vec<ViewMeta> {
-        self._plugins
-            .values()
-            .flat_map(|entry| entry.registered_views.clone())
-            .collect()
-    }
+    // pub fn get_all_views(&self) -> Vec<ViewMeta> {
+    //     self._plugins
+    //         .values()
+    //         .map(|entry| entry.registered_views.clone())
+    //         .collect()
+    // }
 
     pub fn get_all_commands(&self) -> Vec<CommandMeta> {
         self._plugins
@@ -175,7 +176,6 @@ impl PluginManagerActivation for PluginManager {
             manifest: manifest.clone(),
             status: PluginStatus::Registered,
             module: Box::new(module),
-            registered_views: Vec::new(),
             registered_commands: Vec::new(),
         };
 
@@ -188,48 +188,48 @@ impl PluginManagerActivation for PluginManager {
         ))
     }
 
-    fn register_view(&mut self, view: ViewMeta) -> Result<ApiResponse<()>, String> {
-        let plugin_id = view.plugin_id.clone();
-        let view_id = view.id.clone();
+    // fn register_view(&mut self, view: ViewMeta) -> Result<ApiResponse<()>, String> {
+    //     let plugin_id = view.plugin_id.clone();
+    //     let view_id = view.id.clone();
 
-        if !self._plugins.contains_key(&plugin_id) {
-            return Err(format!(
-                "plugin {} not found, cannot register view",
-                plugin_id
-            ));
-        }
+    //     if !self._plugins.contains_key(&plugin_id) {
+    //         return Err(format!(
+    //             "plugin {} not found, cannot register view",
+    //             plugin_id
+    //         ));
+    //     }
 
-        if let Some(owner_plugin_id) = self._global_views.get(&view_id) {
-            if owner_plugin_id != &plugin_id {
-                return Ok(ApiResponse::conflict(format!(
-                    "view id {} already belongs to plugin {}",
-                    view_id, owner_plugin_id
-                )));
-            }
-            return Ok(ApiResponse::warning(format!(
-                "view id {} already registered in plugin {}",
-                view_id, plugin_id
-            )));
-        }
+    //     if let Some(owner_plugin_id) = self._global_views.get(&view_id) {
+    //         if owner_plugin_id != &plugin_id {
+    //             return Ok(ApiResponse::conflict(format!(
+    //                 "view id {} already belongs to plugin {}",
+    //                 view_id, owner_plugin_id
+    //             )));
+    //         }
+    //         return Ok(ApiResponse::warning(format!(
+    //             "view id {} already registered in plugin {}",
+    //             view_id, plugin_id
+    //         )));
+    //     }
 
-        let entry = self
-            ._plugins
-            .get_mut(&plugin_id)
-            .ok_or_else(|| format!("plugin {} not found", plugin_id))?;
+    //     let entry = self
+    //         ._plugins
+    //         .get_mut(&plugin_id)
+    //         .ok_or_else(|| format!("plugin {} not found", plugin_id))?;
 
-        if entry.registered_views.iter().any(|v| v.id == view_id) {
-            return Ok(ApiResponse::warning(format!(
-                "view id {} already registered in plugin {}",
-                view_id, plugin_id
-            )));
-        }
+    //     if entry.registered_views.iter().any(|v| v.id == view_id) {
+    //         return Ok(ApiResponse::warning(format!(
+    //             "view id {} already registered in plugin {}",
+    //             view_id, plugin_id
+    //         )));
+    //     }
 
-        entry.registered_views.push(view);
-        self._global_views.insert(view_id, plugin_id);
+    //     entry.registered_views = Some(view);
+    //     self._global_views.insert(view_id, plugin_id);
 
-        self.emit_event("views-registered", serde_json::json!({}));
-        Ok(ApiResponse::ok())
-    }
+    //     self.emit_event("views-registered", serde_json::json!({}));
+    //     Ok(ApiResponse::ok())
+    // }
 
     fn register_command(&mut self, cmd: CommandMeta) -> Result<ApiResponse<()>, String> {
         let plugin_id = cmd.plugin_id.clone();
@@ -302,7 +302,7 @@ impl PluginManagerActivation for PluginManager {
     }
 
     fn deactivate(&mut self, plugin_id: &String) -> Result<ApiResponse<()>, String> {
-        let (view_ids, command_ids) = {
+        let command_ids = {
             let entry = self
                 ._plugins
                 .get_mut(plugin_id)
@@ -317,31 +317,31 @@ impl PluginManagerActivation for PluginManager {
 
             let _ = entry.module.deactivate();
 
-            let view_ids = entry
-                .registered_views
-                .iter()
-                .map(|v| v.id.clone())
-                .collect::<Vec<_>>();
+            // let view_ids = entry
+            //     .registered_views
+            //     .iter()
+            //     .map(|v| v.id.clone())
+            //     .collect::<Vec<_>>();
             let command_ids = entry
                 .registered_commands
                 .iter()
                 .map(|c| c.id.clone())
                 .collect::<Vec<_>>();
 
-            entry.registered_views.clear();
+            // entry.registered_views.clear();
             entry.registered_commands.clear();
             entry.status = PluginStatus::Inactive;
 
-            (view_ids, command_ids)
+            command_ids
         };
 
         self._contexts.remove(plugin_id);
 
-        for view_id in view_ids {
-            if matches!(self._global_views.get(&view_id), Some(owner) if owner == plugin_id) {
-                self._global_views.remove(&view_id);
-            }
-        }
+        // for view_id in view_ids {
+        //     if matches!(self._global_views.get(&view_id), Some(owner) if owner == plugin_id) {
+        //         self._global_views.remove(&view_id);
+        //     }
+        // }
 
         for command_id in command_ids {
             if matches!(

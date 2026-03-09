@@ -4,7 +4,7 @@
 import { Component, type ComponentType, type ErrorInfo, type ReactNode, useEffect, useState } from 'react';
 import ReactDOM from 'react-dom/client';
 import '../../index.css';
-import { getPluginViewLoaderByPath, resolvePluginViewModuleKey } from '../utils/PluginResourceLoader';
+import { getPluginViewLoaderById, resolvePluginViewModuleKey } from '../utils/pluginResourceLoader';
 
 declare global {
     interface Window {
@@ -15,7 +15,7 @@ declare global {
 interface SandboxParams {
     viewId: string;
     pluginId: string;
-    componentPath: string;
+    // componentPath: string;
     props: Record<string, unknown>;
 }
 
@@ -55,7 +55,7 @@ function parseParams(): SandboxParams {
     const params = new URLSearchParams(window.location.search);
     const viewId = params.get('viewId') ?? '';
     const pluginId = params.get('pluginId') ?? '';
-    const componentPath = params.get('componentPath') ?? '';
+    // const componentPath = params.get('componentPath') ?? '';
     const rawProps = params.get('props') ?? '{}';
 
     let props: Record<string, unknown> = {};
@@ -68,7 +68,7 @@ function parseParams(): SandboxParams {
         props = {};
     }
 
-    return { viewId, pluginId, componentPath, props };
+    return { viewId, pluginId, props };
 }
 
 function App() {
@@ -81,11 +81,11 @@ function App() {
         setParams(nextParams);
 
         async function loadComponent(): Promise<void> {
-            const moduleKey = resolvePluginViewModuleKey(nextParams.componentPath);
-            const loader = getPluginViewLoaderByPath(nextParams.componentPath);
+            const moduleKey = resolvePluginViewModuleKey(nextParams.pluginId);
+            const loader = getPluginViewLoaderById(nextParams.pluginId);
 
             if (!loader) {
-                setError(`Component not found: ${nextParams.componentPath} (${moduleKey})`);
+                setError(`Component not found: ${nextParams.viewId} (${moduleKey})`);
                 setComponent(null);
                 return;
             }
@@ -93,7 +93,7 @@ function App() {
             try {
                 const loaded = await loader();
                 if (!loaded.default) {
-                    setError(`Component default export missing: ${nextParams.componentPath}`);
+                    setError(`Component default export missing: ${nextParams.viewId}`);
                     setComponent(null);
                     return;
                 }

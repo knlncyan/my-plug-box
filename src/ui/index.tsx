@@ -8,7 +8,7 @@ import TopBar from '@/ui/components/TopBar';
 import Aside from './components/Aside';
 
 export default function WorkbenchLayout() {
-    const { loading, ready, error, views, plugins, commands, activeViewId, executeCommand, setActiveView } =
+    const { loading, ready, error, plugins, commands, activeViewId, executeCommand, setActiveView } =
         useCoreRuntime();
     const [commandError, setCommandError] = useState<string | null>(null);
 
@@ -32,31 +32,31 @@ export default function WorkbenchLayout() {
     );
 
     const activeView = useMemo(
-        () => views.find((view) => view.id === activeViewId) ?? null,
-        [views, activeViewId]
+        () => plugins.find((plugin) => plugin.view?.id === activeViewId)?.view ?? null,
+        [plugins, activeViewId]
     );
 
-    const viewsByPlugin = useMemo(() => {
-        const bucket = new Map<string, typeof views>();
-        for (const view of views) {
-            const list = bucket.get(view.plugin_id);
-            if (list) {
-                list.push(view);
-            } else {
-                bucket.set(view.plugin_id, [view]);
-            }
-        }
-        return bucket;
-    }, [views]);
+    // const viewsByPlugin = useMemo(() => {
+    //     const bucket = new Map<string, typeof views>();
+    //     for (const view of views) {
+    //         const list = bucket.get(view.plugin_id);
+    //         if (list) {
+    //             list.push(view);
+    //         } else {
+    //             bucket.set(view.plugin_id, [view]);
+    //         }
+    //     }
+    //     return bucket;
+    // }, [views]);
 
     const commandsByPlugin = useMemo(() => {
         const bucket = new Map<string, typeof commands>();
         for (const command of commands) {
-            const list = bucket.get(command.plugin_id);
+            const list = bucket.get(command.pluginId);
             if (list) {
                 list.push(command);
             } else {
-                bucket.set(command.plugin_id, [command]);
+                bucket.set(command.pluginId, [command]);
             }
         }
         return bucket;

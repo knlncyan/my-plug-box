@@ -27,7 +27,7 @@ import type {
 import {
     getPluginModuleLoaderById,
     resolvePluginModuleKey,
-} from '../utils/PluginResourceLoader';
+} from '../utils/pluginResourceLoader';
 
 let pluginId = '';
 let pluginModule: BuiltinPluginModule | null = null;

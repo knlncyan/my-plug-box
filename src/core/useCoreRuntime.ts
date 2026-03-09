@@ -2,7 +2,6 @@
 import { coreRuntime } from './index';
 import type { ExecuteCommandOptions, PluginRuntimeSnapshot } from '../domain/runtime';
 import type {
-    PluginViewActivateForViewPayload,
     PluginViewExecuteCommandPayload,
     PluginViewRuntimeRequestMessage,
     PluginViewSetActiveViewPayload,
@@ -20,7 +19,7 @@ const EMPTY_SNAPSHOT: PluginRuntimeSnapshot = {
     error: null,
     activeViewId: null,
     plugins: [],
-    views: [],
+    // views: [],
     commands: [],
 };
 
@@ -43,7 +42,6 @@ function useHostRuntime() {
     return {
         ...snapshot,
         executeCommand: coreRuntime.executeCommand,
-        activateForView: coreRuntime.activateForView,
         setActiveView: coreRuntime.setActiveView,
     };
 }
@@ -136,18 +134,9 @@ function useSandboxRuntime() {
         [callParent]
     );
 
-    const activateForView = useCallback(
-        async (viewId: string): Promise<void> => {
-            const payload: PluginViewActivateForViewPayload = { viewId };
-            await callParent('activateForView', payload);
-        },
-        [callParent]
-    );
-
     return {
         ...snapshot,
         executeCommand,
-        activateForView,
         setActiveView,
     };
 }

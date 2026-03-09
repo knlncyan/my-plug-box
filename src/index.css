@@ -194,6 +194,36 @@
   --sidebar-ring: oklch(0.556 0 0);
 }
 
+/* 全局滚动条整体 */
+::-webkit-scrollbar {
+  width: 3px;
+  /* 垂直滚动条宽度 */
+  height: 3px;
+  /* 水平滚动条高度 */
+}
+
+/* 滚动条轨道（背景） */
+/* ::-webkit-scrollbar-track {
+  background: transparent;
+  border-radius: 4px;
+} */
+
+/* 滚动条滑块（可拖动部分） */
+::-webkit-scrollbar-thumb {
+  background: var(--theme-neutral-250);
+  border-radius: 2px;
+}
+
+/* 滚动条滑块悬停状态 */
+::-webkit-scrollbar-thumb:hover {
+  background: var(--theme-neutral-350);
+}
+
+/* 滚动条滑块激活（拖动）状态 */
+::-webkit-scrollbar-thumb:active {
+  background: var(--theme-neutral-450);
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;

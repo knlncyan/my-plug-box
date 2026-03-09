@@ -8,7 +8,7 @@ import TopBar from '@/ui/components/TopBar';
 import Aside from './components/Aside';
 
 export default function WorkbenchLayout() {
-    const { loading, ready, error, plugins, commands, activeViewId, executeCommand, setActiveView } =
+    const { loading, ready, error, plugins, commands, activeViewPluginId, executeCommand, setActiveView } =
         useCoreRuntime();
     const [commandError, setCommandError] = useState<string | null>(null);
 
@@ -32,8 +32,8 @@ export default function WorkbenchLayout() {
     );
 
     const activeView = useMemo(
-        () => plugins.find((plugin) => plugin.view?.id === activeViewId)?.view ?? null,
-        [plugins, activeViewId]
+        () => plugins.find((plugin) => plugin.id === activeViewPluginId)?.view ?? null,
+        [plugins, activeViewPluginId]
     );
 
     // const viewsByPlugin = useMemo(() => {

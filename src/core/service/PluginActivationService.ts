@@ -85,10 +85,6 @@ export class PluginActivationService {
         return this.activatedPlugins.has(pluginId);
     }
 
-    getViewIdByPluginId(pluginId: string): string | null {
-        return this.pluginsById.get(pluginId)?.view?.id ?? null;
-    }
-
     resolvePluginId(target: string): string | null {
         if (this.pluginsById.has(target)) {
             return target;

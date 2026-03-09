@@ -1,11 +1,13 @@
 ﻿import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { coreRuntime } from './index';
-import type { ExecuteCommandOptions, PluginRuntimeSnapshot } from '../domain/runtime';
+import type { ExecuteCommandOptions } from '../domain/runtime';
 import type {
     PluginViewExecuteCommandPayload,
     PluginViewRuntimeRequestMessage,
     PluginViewSetActiveViewPayload,
 } from '../domain/protocol/plugin-view-runtime-bridge.protocol';
+
+type CoreRuntimeSnapshot = ReturnType<typeof coreRuntime.getSnapshot>;
 
 declare global {
     interface Window {
@@ -13,11 +15,11 @@ declare global {
     }
 }
 
-const EMPTY_SNAPSHOT: PluginRuntimeSnapshot = {
+const EMPTY_SNAPSHOT: CoreRuntimeSnapshot = {
     loading: true,
     ready: false,
     error: null,
-    activeViewId: null,
+    activeViewPluginId: null,
     plugins: [],
     // views: [],
     commands: [],
@@ -47,7 +49,7 @@ function useHostRuntime() {
 }
 
 function useSandboxRuntime() {
-    const [snapshot, setSnapshot] = useState<PluginRuntimeSnapshot>(EMPTY_SNAPSHOT);
+    const [snapshot, setSnapshot] = useState<CoreRuntimeSnapshot>(EMPTY_SNAPSHOT);
     const pendingRef = useRef(new Map<string, PendingCall>());
     const requestSerialRef = useRef(0);
 
@@ -91,7 +93,7 @@ function useSandboxRuntime() {
             }
 
             if (data.type === 'plugin-view-runtime-snapshot' && data.snapshot) {
-                setSnapshot(data.snapshot as PluginRuntimeSnapshot);
+                setSnapshot(data.snapshot as CoreRuntimeSnapshot);
             }
         }
 
@@ -99,7 +101,7 @@ function useSandboxRuntime() {
 
         void callParent('getSnapshot')
             .then((value) => {
-                setSnapshot(value as PluginRuntimeSnapshot);
+                setSnapshot(value as CoreRuntimeSnapshot);
             })
             .catch((error) => {
                 setSnapshot((prev) => ({ ...prev, loading: false, ready: false, error: String(error) }));

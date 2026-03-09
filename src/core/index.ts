@@ -103,7 +103,8 @@ export function registerCapability<K extends string>(
 // React Hook 入口
 export { useCoreRuntime } from './useCoreRuntime';
 
-export type { ExecuteCommandOptions, PluginRuntimeSnapshot } from '../domain/runtime';
+export type { ExecuteCommandOptions } from '../domain/runtime';
+export type { CoreRuntimeSnapshot as PluginRuntimeSnapshot } from './service/PluginRuntimeService';
 export type {
     CapabilityContext,
     CapabilityContract,

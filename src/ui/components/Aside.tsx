@@ -1,58 +1,25 @@
 import { useLayoutStore } from "@/store/useLayoutStore";
 import { useCoreRuntime } from "@/core";
-import { Ellipsis, LayoutGrid, Minus, PanelLeftClose, PanelLeftOpen, Search, Tags, X } from "lucide-react";
-import { useCallback, useMemo, useRef, useState } from "react";
-import { Input } from "@/components/ui/input";
+import { Ellipsis, LayoutGrid, PanelLeftClose, PanelLeftOpen, Search, Tags, X } from "lucide-react";
+import { useCallback } from "react";
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
 import { Item, ItemContent, ItemDescription, ItemGroup, ItemHeader, ItemMedia, ItemTitle } from "@/components/ui/item";
 import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuGroup, DropdownMenuLabel, DropdownMenuPortal, DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 
 export default () => {
-    const { loading, ready, error, plugins, commands, activeViewId, executeCommand, setActiveView } =
-        useCoreRuntime();
-    const [commandError, setCommandError] = useState<string | null>(null);
+    const { plugins, commands, activeViewPluginId, setActiveView } = useCoreRuntime();
     const asideHidden = useLayoutStore(state => state.asideHidden);
     const toggleAside = useLayoutStore(state => state.toggleAside);
     const asideActivatedKey = useLayoutStore(state => state.asideActivatedKey);
     const asideActivateKey = useLayoutStore(state => state.asideActivateKey);
     const plugViewModel = useLayoutStore(state => state.plugViewModel);
 
-    const selectView = useCallback(
+    const selectViewPlugin = useCallback(
         (viewId: string) => {
             setActiveView(viewId);
         },
         [setActiveView]
     );
-
-    const runCommand = useCallback(
-        async (commandId: string) => {
-            try {
-                setCommandError(null);
-                await executeCommand(commandId);
-            } catch (runError) {
-                setCommandError(String(runError));
-            }
-        },
-        [executeCommand]
-    );
-
-    const activeView = useMemo(
-        () => plugins.find((plugin) => plugin.view?.id === activeViewId)?.view ?? null,
-        [plugins, activeViewId]
-    );
-
-    const commandsByPlugin = useMemo(() => {
-        const bucket = new Map<string, typeof commands>();
-        for (const command of commands) {
-            const list = bucket.get(command.pluginId);
-            if (list) {
-                list.push(command);
-            } else {
-                bucket.set(command.pluginId, [command]);
-            }
-        }
-        return bucket;
-    }, [commands]);
 
     const commandCount = commands.length;
 
@@ -139,8 +106,8 @@ export default () => {
                         {plugViewModel == 'list'
                             ? <ItemGroup className="gap-4">
                                 {plugins.map((plugin) => (
-                                    <Item key={plugin.id} variant="outline" asChild role="listitem">
-                                        <a href="#" className="flex items-center gap-4 relative">
+                                    <Item key={plugin.id} variant="outline" asChild role="listitem" onClick={() => selectViewPlugin(plugin.id)}>
+                                        <a href="#" className={`flex items-center gap-4 relative ${activeViewPluginId == plugin.id ? 'bg-neutral-700 text-white hover:bg-neutral-700!' : 'hover:bg-neutral-200!'}`}>
                                             <ItemMedia variant="image">
                                                 <img
                                                     src={`public/vite.svg`}
@@ -153,7 +120,7 @@ export default () => {
                                                 <ItemTitle className="block w-full line-clamp-1">
                                                     {plugin.name}
                                                 </ItemTitle>
-                                                <ItemDescription className="line-clamp-1">{plugin.description}</ItemDescription>
+                                                <ItemDescription className={`line-clamp-1 ${activeViewPluginId == plugin.id && 'text-neutral-300'}`}>{plugin.description}</ItemDescription>
                                             </ItemContent>
                                             {/* 增加一个表示状态的小圆点 */}
                                             <div className="absolute bottom-2 right-2 w-1.5 h-1.5 rounded-full bg-green-500" />
@@ -161,9 +128,9 @@ export default () => {
                                     </Item>
                                 ))}
                             </ItemGroup>
-                            : <ItemGroup className={`cursor-pointer grid ${plugViewModel == 'grid-medium' ? 'grid-cols-2' : 'grid-cols-3'} gap-3`}>
+                            : <ItemGroup className={`grid ${plugViewModel == 'grid-medium' ? 'grid-cols-2' : 'grid-cols-3'} gap-3`}>
                                 {plugins.map((plugin) => (
-                                    <Item key={plugin.id} variant="muted" className="flex relative gap-1 hover:bg-neutral-100">
+                                    <Item key={plugin.id} variant="muted" className={`flex relative cursor-pointer gap-1 ${activeViewPluginId == plugin.id ? 'bg-neutral-700 text-white' : 'hover:bg-neutral-200'}`} onClick={() => selectViewPlugin(plugin.id)}>
                                         <ItemHeader>
                                             <img
                                                 src={`public/vite.svg`}
@@ -180,7 +147,7 @@ export default () => {
                             </ItemGroup>
                         }
                     </div>
-                    <div className="flex-1 overflow-auto p-3">
+                    {/* <div className="flex-1 overflow-auto p-3">
                         {plugins.map((plugin) => {
                             const pluginView = plugin.view;
                             const pluginCommands = commandsByPlugin.get(plugin.id) ?? [];
@@ -198,8 +165,8 @@ export default () => {
                                         ) : (
                                             <div className="space-y-1">
                                                 <button
-                                                    onClick={() => selectView(pluginView.pluginId)}
-                                                    className={`w-full rounded px-2 py-1.5 text-left text-sm transition ${activeViewId === pluginView?.id
+                                                    onClick={() => selectViewPlugin(plugin.id)}
+                                                    className={`w-full rounded px-2 py-1.5 text-left text-sm transition ${activeViewPluginId === plugin?.id
                                                         ? 'bg-primary-700 text-white'
                                                         : 'text-neutral-700 hover:bg-neutral-100'
                                                         }`}
@@ -236,16 +203,17 @@ export default () => {
                                 </section>
                             );
                         })}
-                    </div>
+                    </div> */}
                     <div className="flex p-1 border-t border-neutral-150">
                         <p className="mt-1 text-xs text-neutral-500">
                             {plugins.length} plugins, {commandCount} commands
                         </p>
                     </div>
                 </>
-            )}
+            )
+            }
 
-        </div>
+        </div >
     )
 }
 

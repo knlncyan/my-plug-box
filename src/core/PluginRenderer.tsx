@@ -90,7 +90,7 @@ function PluginSandboxFrame({ view }: Props) {
         function postSnapshot(targetWindow: Window): void {
             const message: PluginViewRuntimeSnapshotMessage = {
                 type: 'plugin-view-runtime-snapshot',
-                snapshot: coreRuntime.getSnapshot(),
+                snapshot: coreRuntime.getSnapshot() as unknown as PluginViewRuntimeSnapshotMessage['snapshot'],
             };
             targetWindow.postMessage(message, '*');
         }

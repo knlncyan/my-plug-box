@@ -13,7 +13,6 @@ export interface PluginViewManifest {
   id: string;
   title: string;
   pluginId: string;
-  // component_path: string;
   props: Record<string, unknown>;
 }
 
@@ -21,6 +20,7 @@ export interface PluginManifestDto {
   id: string;
   name: string;
   version: string;
+  icon?: string;
   description?: string;
   activationEvents?: string[];
   view?: PluginViewManifest;
@@ -36,7 +36,9 @@ export interface PluginSummary {
   id: string;
   name: string;
   version: string;
+  // "Registered", "Activated", "Error"
   status: string;
+  icon?: string;
   error?: string;
   description?: string;
   view?: PluginViewManifest

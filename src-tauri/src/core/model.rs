@@ -29,6 +29,7 @@ pub struct PluginSummary {
     pub name: String,
     pub version: String,
     pub status: String, // "Registered", "Activated", "Error"
+    pub icon: Option<String>,
     pub error: Option<String>,
     pub description: Option<String>,
     pub view: Option<PluginViewManifest>,
@@ -43,6 +44,7 @@ pub struct PluginManifest {
     pub id: String,
     pub name: String,
     pub version: String,
+    pub icon: Option<String>,
     pub description: Option<String>,
     #[serde(default, rename = "activationEvents")]
     pub activation_events: Vec<String>,

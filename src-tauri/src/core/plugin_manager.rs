@@ -136,9 +136,10 @@ impl PluginManager {
                     name: entry.manifest.name.clone(),
                     version: entry.manifest.version.clone(),
                     status: format!("{:?}", entry.status),
+                    icon: entry.manifest.icon.clone(),
                     error: error_msg,
                     description: entry.manifest.description.clone(),
-                    view: entry.manifest.view.clone()
+                    view: entry.manifest.view.clone(),
                 }
             })
             .collect()

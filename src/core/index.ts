@@ -17,7 +17,7 @@ import { PluginEventBus } from './PluginEventBus';
  * 1) 负责 IoC 容器装配。
  * 2) 导出运行时服务入口（coreRuntime + useCoreRuntime）。
  */
-const container = new SimpleContainer();
+export const container = new SimpleContainer();
 
 // 事件总线：插件事件发布/订阅
 container.registerSingleton(PluginEventBus, () => new PluginEventBus());

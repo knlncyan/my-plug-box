@@ -1,10 +1,11 @@
-import { useLayoutStore } from "@/store/useLayoutStore";
 import { useCoreRuntime } from "@/core";
 import { Activity, Boxes, Ellipsis, LayoutGrid, PanelLeftClose, PanelLeftOpen, Search, Settings2, Tags, X } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
-import { Item, ItemContent, ItemDescription, ItemGroup, ItemHeader, ItemMedia, ItemTitle } from "@/components/ui/item";
+import { Item, ItemContent, ItemDescription, ItemGroup, ItemMedia, ItemTitle } from "@/components/ui/item";
 import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuGroup, DropdownMenuLabel, DropdownMenuPortal, DropdownMenuSeparator, DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { useMainViewStore } from "@/store/mainViewStore";
+import PluginManager from "../pages/pluginManager";
 
 type AsideBarKeys = 'none' | 'plugs' | 'search' | 'tags'
 type PlugViewModels = 'list' | 'grid-small' | 'grid-medium'
@@ -12,17 +13,19 @@ type PlugOrderKeys = 'name' | 'activate'
 
 export default () => {
     const { plugins, activeViewPluginId, setActiveView } = useCoreRuntime();
+    // 侧边栏隐藏
     const [asideHidden, setAsideHidden] = useState<boolean>(false);
+    // 隐藏后台插件（无视图插件）
     const [hiddenBackend, setHiddenBackend] = useState<boolean>(false);
+    // 选中的功能键
     const [asideBarKey, setAsideBarKey] = useState<AsideBarKeys>('plugs');
+    // 插件展示模式
     const [plugViewModel, setPlugViewModel] = useState<PlugViewModels>('list');
-    const [plugOrderKey, setPlugOrderKey] = useState<PlugOrderKeys>('activate');
-    // const asideHidden = useLayoutStore(state => state.asideHidden);
-    // const toggleAside = useLayoutStore(state => state.toggleAside);
-    // const asideActivatedKey = useLayoutStore(state => state.asideActivatedKey);
-    // const asideActivateKey = useLayoutStore(state => state.asideActivateKey);
-    // const plugViewModel = useLayoutStore(state => state.plugViewModel);
-    // const plugOrderKey = useLayoutStore(state => state.plugOrderKey);
+    // 插件排序模式
+    const [plugOrderKey, setPlugOrderKey] = useState<PlugOrderKeys>('name');
+    // 插件搜索
+    const [search, setSearch] = useState<string>('');
+    const setViewContent = useMainViewStore(state => state.setViewContent);
 
     const selectViewPlugin = useCallback(
         (viewId: string) => {
@@ -33,16 +36,32 @@ export default () => {
 
     const { activatedPlugins, handledPlugins } = useMemo(() => {
         const activatedPlugins = plugins.filter(it => it.status == 'Activated');
-        const handledPlugins = hiddenBackend ? plugins.filter(it => !!it.view)
-            : plugOrderKey == 'activate' ? plugins.sort((a, _) => (a.status == 'Activated' ? -1 : 1))
-                : plugins.sort((a, b) => a.name.localeCompare(b.name));
+        // 过滤
+        const filteredPlugins = plugins.filter(it => {
+            if (hiddenBackend) return !!it.view;
+            return it.name.includes(search) || it.description?.includes(search)
+        });
+        // 排序
+        const handledPlugins = plugOrderKey == 'activate'
+            ? filteredPlugins.sort((a, _) => (a.status == 'Activated' ? -1 : 1))
+            : filteredPlugins.sort((a, b) => a.name.localeCompare(b.name));
         return { activatedPlugins, handledPlugins };
-    }, [plugins, hiddenBackend, plugOrderKey]);
+    }, [plugins, hiddenBackend, plugOrderKey, search]);
 
-    // plugs被选中
+    // 功能键被选中
     const handleAsideBarKey = (key: AsideBarKeys) => {
         setAsideBarKey(key);
         if (asideHidden) setAsideHidden(!asideHidden);
+    }
+    // 取消搜索
+    const cancelSearch = () => {
+        setAsideBarKey('plugs');
+        setSearch('');
+    }
+    // 插件被选中
+    const handlePlugSelect = (pluginId: string) => {
+        selectViewPlugin(pluginId);
+        setViewContent(null);
     }
 
     return (
@@ -51,13 +70,13 @@ export default () => {
             <div className={`flex ${asideHidden && 'flex-col'}  p-1`}>
                 {asideBarKey == 'search'
                     ? <InputGroup className="h-8">
-                        <InputGroupInput placeholder="Search..." autoFocus />
+                        <InputGroupInput placeholder="Search..." autoFocus value={search} onChange={e => setSearch(e.target.value)} />
                         <InputGroupAddon>
                             <Search />
                         </InputGroupAddon>
                         <InputGroupAddon align="inline-end" >
                             <div
-                                onClick={() => setAsideBarKey('plugs')}
+                                onClick={cancelSearch}
                                 className="flex h-8 w-8 pl-[-8px] cursor-pointer items-center justify-center"
                             >
                                 <X className="h-4 w-4" />
@@ -108,7 +127,7 @@ export default () => {
                             {plugViewModel == 'list'
                                 ? <ItemGroup className="gap-4">
                                     {handledPlugins.map((plugin) => (
-                                        <Item key={plugin.id} variant="outline" asChild role="listitem" onClick={() => selectViewPlugin(plugin.id)}>
+                                        <Item key={plugin.id} variant="outline" asChild role="listitem" onClick={() => handlePlugSelect(plugin.id)}>
                                             <div className={`flex items-center cursor-pointer gap-4 relative ${activeViewPluginId == plugin.id ? 'bg-neutral-700 text-white hover:bg-neutral-700!' : 'hover:bg-neutral-200!'}`}>
                                                 <ItemMedia variant="image">
                                                     {plugin.icon ? (
@@ -144,7 +163,7 @@ export default () => {
                                             // 1. 保持 aspect-square 确保整体是正方形
                                             // 2. 移除 flex gap-1 从根节点，改为在内部需要的地方加，避免影响正方形计算
                                             className={`relative cursor-pointer aspect-square p-2 ${activeViewPluginId == plugin.id ? 'bg-neutral-700 text-white' : 'hover:bg-neutral-200'}`}
-                                            onClick={() => selectViewPlugin(plugin.id)}
+                                            onClick={() => handlePlugSelect(plugin.id)}
                                         >
                                             {/* 内部容器：负责垂直排列图片和文字，并居中 */}
                                             <div className="flex flex-col items-center justify-center w-full h-full gap-1">
@@ -179,7 +198,10 @@ export default () => {
                         <div className="flex p-1 items-center gap-1.5  text-xs text-neutral-500 border-t border-neutral-150">
                             <Boxes className="w-4 h-4" /><span>{plugins.length}</span>
                             <Activity className="w-4 h-4" /><span>{activatedPlugins.length}</span>
-                            <button className='flex ml-auto h-8 w-8 cursor-pointer items-center justify-center rounded hover:bg-black/10' >
+                            <button
+                                className='flex ml-auto h-8 w-8 cursor-pointer items-center justify-center rounded hover:bg-black/10'
+                                onClick={() => setViewContent(<PluginManager />)}
+                            >
                                 <Settings2 className="h-4 w-4 " />
                             </button>
                         </div>
@@ -191,7 +213,7 @@ export default () => {
                             <div
                                 key={plugin.id}
                                 className={`flex items-center justify-center relative cursor-pointer mb-1 w-8 h-8 rounded ${activeViewPluginId == plugin.id ? 'bg-neutral-700 text-white' : 'hover:bg-neutral-200'}`}
-                                onClick={() => selectViewPlugin(plugin.id)}
+                                onClick={() => handlePlugSelect(plugin.id)}
                             >
                                 {plugin.icon ? (
                                     <img
@@ -210,7 +232,10 @@ export default () => {
                         ))}
                     </div>
                     <div className='flex w-10 h-10 items-center justify-center my-1'>
-                        <button className='flex w-8 h-8  cursor-pointer items-center justify-center rounded hover:bg-black/10' >
+                        <button
+                            className='flex w-8 h-8  cursor-pointer items-center justify-center rounded hover:bg-black/10'
+                            onClick={() => setViewContent(<PluginManager />)}
+                        >
                             <Settings2 className="h-4 w-4 " />
                         </button>
                     </div>

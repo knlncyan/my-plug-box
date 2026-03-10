@@ -21,7 +21,6 @@ const EMPTY_SNAPSHOT: CoreRuntimeSnapshot = {
     error: null,
     activeViewPluginId: null,
     plugins: [],
-    // views: [],
     commands: [],
 };
 

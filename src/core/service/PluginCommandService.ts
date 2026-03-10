@@ -39,8 +39,8 @@ export class PluginCommandService {
     }
 
     private async loadCommands(): Promise<void> {
-        const data = await service.listCommands();
-        this.setCommandCatalog(data);
+        const req = await service.listCommands();
+        this.setCommandCatalog(req.data ?? []);
     }
 
     async executeCommand(

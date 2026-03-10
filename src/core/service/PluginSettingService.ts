@@ -20,7 +20,7 @@ export class PluginSettingService {
     }
 
     private async loadAll(): Promise<void> {
-        this.setting = await service.getAllPluginSettings();
+        this.setting = (await service.getAllPluginSettings()).data ?? {};
     }
 
     /**
@@ -51,6 +51,9 @@ export class PluginSettingService {
         return this.setting[globalKey] as T | undefined;
     }
 
+    /**
+     * 持久化单个设置
+     */
     async persist(pluginId: string, key: string, value: unknown): Promise<void> {
         await this.ensureLoaded();
         const scopedKey = `${pluginId}.${key}`;
@@ -63,5 +66,12 @@ export class PluginSettingService {
         }
 
         this.pluginEventBus.emit('setting.changed', { pluginId, key, value });
+    }
+
+    /**
+     * 持久化多个设置
+     */
+    async multiPersist(pluginId: string, records: JSON) {
+
     }
 }

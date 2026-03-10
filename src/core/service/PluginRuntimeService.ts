@@ -94,18 +94,6 @@ export class PluginRuntimeService {
         return this.shutdownPromise;
     };
 
-    // setActiveView = (pluginId: string | null): void => {
-    //     if (!this.deps.pluginViewService.setActiveView(viewId)) {
-    //         this.patch({ error: `View not found: ${String(viewId)}` });
-    //         return;
-    //     }
-
-    //     this.patch({ activeViewPluginId: this.deps.pluginViewService.getActiveViewId(), error: null });
-    //     if (viewId !== null) {
-    //         void this.activateForView(viewId);
-    //     }
-    // };
-
     setActiveView = (viewId: string | null): void => {
         if (viewId === null) {
             this.patch({ activeViewPluginId: null, error: null });
@@ -307,15 +295,7 @@ export class PluginRuntimeService {
 
     private async refreshPluginsAndCommandsAndHooks(): Promise<void> {
         try {
-            const [plugins, commands] = await Promise.all([service.listPlugins(), service.listCommands()]);
-            this.deps.pluginActivationService.syncFromPluginList(plugins);
-            this.deps.pluginCommandService.setCommandCatalog(commands);
-            this.patch({
-                plugins,
-                commands,
-                activeViewPluginId: this.resolveActivePluginId(plugins, this.snapshot.activeViewPluginId),
-                error: null,
-            });
+            await this.refreshAll();
             await this.syncFrontendModuleState();
         } catch (error) {
             this.patch({ error: String(error) });
@@ -323,10 +303,9 @@ export class PluginRuntimeService {
     }
 
     private async refreshAll(): Promise<void> {
-        const [plugins, commands] = await Promise.all([
-            service.listPlugins(),
-            service.listCommands(),
-        ]);
+        const [pluginsReponse, commandsReponse] = await Promise.all([service.listPlugins(), service.listCommands()]);
+        const plugins = pluginsReponse.data ?? [];
+        const commands = commandsReponse.data ?? [];
         this.deps.pluginActivationService.syncFromPluginList(plugins);
         this.deps.pluginCommandService.setCommandCatalog(commands);
 

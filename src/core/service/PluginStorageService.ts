@@ -7,7 +7,7 @@
  */
 export class PluginStorageService {
     async getSnapshot<T>(pluginId: string): Promise<T> {
-        const snapshot = await service.getPluginStorageSnapshot(pluginId);
+        const snapshot = (await service.getPluginStorageSnapshot(pluginId)).data;
         // 返回副本，避免调用方直接篡改底层对象。
         return { ...snapshot } as T;
     }

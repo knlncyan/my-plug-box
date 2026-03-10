@@ -28,15 +28,6 @@ impl<T> ApiResponse<T> {
         }
     }
 
-    pub fn conflict(message: String) -> Self {
-        ApiResponse {
-            success: false,
-            code: "CONFLICT".to_string(),
-            message: message,
-            data: None,
-        }
-    }
-
     pub fn error(message: String) -> Self {
         ApiResponse {
             success: false,

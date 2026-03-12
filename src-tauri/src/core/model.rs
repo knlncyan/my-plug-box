@@ -1,6 +1,7 @@
 /// Core plugin-domain models shared across command handlers and manager runtime.
 use crate::core::PluginContext;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 // ==========================   一些插件元数据 =============================
 /// 视图元数据：描述一个插件贡献的页面
@@ -84,4 +85,13 @@ pub struct PluginEntry {
     pub module: Box<dyn PluginActivation + Send>,
     // 注册的命令
     pub registered_commands: Vec<CommandMeta>,
+}
+
+/**
+ * 读取多个设置
+ */
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SettingsDTO {
+    pub key: String,
+    pub value: Value,
 }

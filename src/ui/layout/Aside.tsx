@@ -6,23 +6,22 @@ import { Item, ItemContent, ItemDescription, ItemGroup, ItemMedia, ItemTitle } f
 import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuGroup, DropdownMenuLabel, DropdownMenuPortal, DropdownMenuSeparator, DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useMainViewStore } from "@/store/mainViewStore";
 import PluginManager from "../pages/pluginManager";
-
-type AsideBarKeys = 'none' | 'plugs' | 'search' | 'tags'
-type PlugViewModels = 'list' | 'grid-small' | 'grid-medium'
-type PlugOrderKeys = 'name' | 'activate'
+import { AsideBarKeys, useAsideStateStore } from "@/store/asideStateStore";
 
 export default () => {
     const { plugins, activeViewPluginId, setActiveView } = useCoreRuntime();
     // 侧边栏隐藏
-    const [asideHidden, setAsideHidden] = useState<boolean>(false);
+    const hiddenAside = useAsideStateStore(it => it.hiddenAside);
+    const toggleAside = useAsideStateStore(it => it.toggleAside);
     // 隐藏后台插件（无视图插件）
-    const [hiddenBackend, setHiddenBackend] = useState<boolean>(false);
+    const hiddenBackend = useAsideStateStore(it => it.hiddenBackend);
     // 选中的功能键
-    const [asideBarKey, setAsideBarKey] = useState<AsideBarKeys>('plugs');
+    const asideBarKey = useAsideStateStore(it => it.asideBarKey);
+    const changeAsideBarKey = useAsideStateStore(it => it.changeAsideBarKey);
     // 插件展示模式
-    const [plugViewModel, setPlugViewModel] = useState<PlugViewModels>('list');
+    const plugViewMode = useAsideStateStore(it => it.plugViewMode);
     // 插件排序模式
-    const [plugOrderKey, setPlugOrderKey] = useState<PlugOrderKeys>('name');
+    const plugOrderKey = useAsideStateStore(it => it.plugOrderKey);
     // 插件搜索
     const [search, setSearch] = useState<string>('');
     const setViewContent = useMainViewStore(state => state.setViewContent);
@@ -50,12 +49,12 @@ export default () => {
 
     // 功能键被选中
     const handleAsideBarKey = (key: AsideBarKeys) => {
-        setAsideBarKey(key);
-        if (asideHidden) setAsideHidden(!asideHidden);
+        changeAsideBarKey(key);
+        if (hiddenAside) toggleAside();
     }
     // 取消搜索
     const cancelSearch = () => {
-        setAsideBarKey('plugs');
+        changeAsideBarKey('plugs');
         setSearch('');
     }
     // 插件被选中
@@ -65,9 +64,9 @@ export default () => {
     }
 
     return (
-        <div className={`flex flex-col ${asideHidden ? 'w-10' : 'w-[25%] max-w-75'} border-r border-neutral-200 bg-white`}>
+        <div className={`flex flex-col ${hiddenAside ? 'w-10' : 'w-[25%] max-w-75'} border-r border-neutral-200 bg-white`}>
 
-            <div className={`flex ${asideHidden && 'flex-col'}  p-1`}>
+            <div className={`flex ${hiddenAside && 'flex-col'}  p-1`}>
                 {asideBarKey == 'search'
                     ? <InputGroup className="h-8">
                         <InputGroupInput placeholder="Search..." autoFocus value={search} onChange={e => setSearch(e.target.value)} />
@@ -102,17 +101,17 @@ export default () => {
                         >
                             <Tags className="h-4 w-4 " />
                         </button>
-                        <MoreOptions asideHidden={asideHidden} plugViewModel={plugViewModel} setPlugViewModel={setPlugViewModel} plugOrderKey={plugOrderKey} setPlugOrderKey={setPlugOrderKey} hiddenBackend={hiddenBackend} setHiddenBackend={setHiddenBackend} />
-                        {asideHidden ? (
+                        <MoreOptions />
+                        {hiddenAside ? (
                             <button
-                                onClick={() => { setAsideBarKey('plugs'); setAsideHidden(!asideHidden); }}
+                                onClick={() => { changeAsideBarKey('plugs'); toggleAside(); }}
                                 className="flex h-8 w-8 cursor-pointer items-center justify-center rounded hover:bg-black/10"
                             >
                                 <PanelLeftOpen className="h-4 w-4 " />
                             </button>
                         ) : (
                             <button
-                                onClick={() => { setAsideBarKey('none'); setAsideHidden(!asideHidden); }}
+                                onClick={() => { changeAsideBarKey('none'); toggleAside(); }}
                                 className="flex h-8 w-8 cursor-pointer items-center justify-center rounded hover:bg-black/10"
                             >
                                 <PanelLeftClose className="h-4 w-4 " />
@@ -120,11 +119,11 @@ export default () => {
                         )}
                     </>}
             </div>
-            {!asideHidden
+            {!hiddenAside
                 ? (
                     <>
                         <div className="flex-1 overflow-auto p-3">
-                            {plugViewModel == 'list'
+                            {plugViewMode == 'list'
                                 ? <ItemGroup className="gap-4">
                                     {handledPlugins.map((plugin) => (
                                         <Item key={plugin.id} variant="outline" asChild role="listitem" onClick={() => handlePlugSelect(plugin.id)}>
@@ -155,7 +154,7 @@ export default () => {
                                         </Item>
                                     ))}
                                 </ItemGroup>
-                                : <ItemGroup className={`grid ${plugViewModel == 'grid-medium' ? 'grid-cols-2' : 'grid-cols-3'} gap-3`}>
+                                : <ItemGroup className={`grid ${plugViewMode == 'grid-medium' ? 'grid-cols-2' : 'grid-cols-3'} gap-3`}>
                                     {handledPlugins.map((plugin) => (
                                         <Item
                                             key={plugin.id}
@@ -173,7 +172,7 @@ export default () => {
                                                         <img
                                                             src={plugin.icon}
                                                             alt={plugin.name}
-                                                            className={`max-w-[80%] max-h-[80%] w-auto h-auto object-contain ${plugViewModel !== 'grid-medium' ? 'max-w-[60%] max-h-[60%]' : ''}`}
+                                                            className={`max-w-[80%] max-h-[80%] w-auto h-auto object-contain ${plugViewMode !== 'grid-medium' ? 'max-w-[60%] max-h-[60%]' : ''}`}
                                                         />
                                                     ) : (
                                                         <span className={`text-2xl font-bold leading-none ${activeViewPluginId == plugin.id ? 'text-white' : 'text-neutral-700'}`}>
@@ -182,7 +181,7 @@ export default () => {
                                                     )}
                                                 </div>
                                                 {/* 文字区域：仅在 grid-medium 显示 */}
-                                                {plugViewModel == 'grid-medium' && (
+                                                {plugViewMode == 'grid-medium' && (
                                                     <ItemTitle className="block w-full text-xs text-center line-clamp-1 font-medium">
                                                         {plugin.name}
                                                     </ItemTitle>
@@ -249,18 +248,18 @@ export default () => {
     )
 }
 
-interface MoreOptionsProps {
-    asideHidden: boolean;
-    hiddenBackend: boolean;
-    setHiddenBackend: (val: boolean) => void;
-    plugViewModel: PlugViewModels;
-    setPlugViewModel: (val: PlugViewModels) => void;
-    plugOrderKey: PlugOrderKeys;
-    setPlugOrderKey: (val: PlugOrderKeys) => void;
-}
-
-const MoreOptions = (props: MoreOptionsProps) => {
-    const { asideHidden, plugViewModel, setPlugViewModel, plugOrderKey, setPlugOrderKey, hiddenBackend, setHiddenBackend } = props;
+const MoreOptions = () => {
+    // 侧边栏隐藏
+    const hiddenAside = useAsideStateStore(it => it.hiddenAside);
+    // 隐藏后台插件（无视图插件）
+    const hiddenBackend = useAsideStateStore(it => it.hiddenBackend);
+    const changeHiddenBackend = useAsideStateStore(it => it.changeHiddenBackend);
+    // 插件展示模式
+    const plugViewMode = useAsideStateStore(it => it.plugViewMode);
+    const changePlugViewMode = useAsideStateStore(it => it.changePlugViewMode);
+    // 插件排序模式
+    const plugOrderKey = useAsideStateStore(it => it.plugOrderKey);
+    const changePlugOrderKey = useAsideStateStore(it => it.changePlugOrderKey);
 
     return (
         <DropdownMenu>
@@ -269,7 +268,7 @@ const MoreOptions = (props: MoreOptionsProps) => {
                     <Ellipsis className="h-4 w-4 " />
                 </button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent className="w-40" side={`${asideHidden ? 'right' : 'bottom'}`} align={`${asideHidden ? 'center' : 'start'}`} sideOffset={asideHidden ? 10 : 4}>
+            <DropdownMenuContent className="w-40" side={`${hiddenAside ? 'right' : 'bottom'}`} align={`${hiddenAside ? 'center' : 'start'}`} sideOffset={hiddenAside ? 10 : 4}>
                 <DropdownMenuGroup>
                     <DropdownMenuLabel className="text-xs text-neutral-500">Appearance</DropdownMenuLabel>
 
@@ -278,14 +277,14 @@ const MoreOptions = (props: MoreOptionsProps) => {
                         <DropdownMenuPortal>
                             <DropdownMenuSubContent>
                                 <DropdownMenuCheckboxItem
-                                    checked={plugViewModel == 'grid-small'}
-                                    onCheckedChange={() => setPlugViewModel('grid-small')}
+                                    checked={plugViewMode == 'grid-small'}
+                                    onCheckedChange={() => changePlugViewMode('grid-small')}
                                 >
                                     Small
                                 </DropdownMenuCheckboxItem>
                                 <DropdownMenuCheckboxItem
-                                    checked={plugViewModel == 'grid-medium'}
-                                    onCheckedChange={() => setPlugViewModel('grid-medium')}
+                                    checked={plugViewMode == 'grid-medium'}
+                                    onCheckedChange={() => changePlugViewMode('grid-medium')}
                                 >
                                     Medium
                                 </DropdownMenuCheckboxItem>
@@ -295,8 +294,8 @@ const MoreOptions = (props: MoreOptionsProps) => {
                         </DropdownMenuPortal>
                     </DropdownMenuSub>
                     <DropdownMenuCheckboxItem
-                        checked={plugViewModel == 'list'}
-                        onCheckedChange={() => setPlugViewModel('list')}
+                        checked={plugViewMode == 'list'}
+                        onCheckedChange={() => changePlugViewMode('list')}
                     >
                         List View
                     </DropdownMenuCheckboxItem>
@@ -305,13 +304,13 @@ const MoreOptions = (props: MoreOptionsProps) => {
                     <DropdownMenuLabel className="text-xs text-neutral-500">Order</DropdownMenuLabel>
                     <DropdownMenuCheckboxItem
                         checked={plugOrderKey == 'activate'}
-                        onCheckedChange={() => setPlugOrderKey('activate')}
+                        onCheckedChange={() => changePlugOrderKey('activate')}
                     >
                         Activate First
                     </DropdownMenuCheckboxItem>
                     <DropdownMenuCheckboxItem
                         checked={plugOrderKey == 'name'}
-                        onCheckedChange={() => setPlugOrderKey('name')}
+                        onCheckedChange={() => changePlugOrderKey('name')}
                     >
                         Name First
                     </DropdownMenuCheckboxItem>
@@ -319,7 +318,7 @@ const MoreOptions = (props: MoreOptionsProps) => {
                 <DropdownMenuSeparator />
                 <DropdownMenuCheckboxItem
                     checked={hiddenBackend}
-                    onCheckedChange={() => setHiddenBackend(!hiddenBackend)}
+                    onCheckedChange={() => changeHiddenBackend()}
                 >
                     Hiden Backend Plugs
                 </DropdownMenuCheckboxItem>

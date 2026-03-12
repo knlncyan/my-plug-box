@@ -24,10 +24,8 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
             commands::register_js_plugin,
-            // commands::register_view_meta,
             commands::register_command_meta,
             commands::get_plugin_list,
-            // commands::get_registered_views,
             commands::get_registered_commands,
             commands::get_all_plugin_settings,
             commands::set_plugin_setting,
@@ -36,6 +34,8 @@ pub fn run() {
             commands::activate_all_plugins,
             commands::deactivate_plugin,
             commands::activate_plugin,
+            // 初始化命令
+            commands::init_settings,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

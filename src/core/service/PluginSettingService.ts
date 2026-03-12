@@ -67,11 +67,4 @@ export class PluginSettingService {
 
         this.pluginEventBus.emit('setting.changed', { pluginId, key, value });
     }
-
-    /**
-     * 持久化多个设置
-     */
-    async multiPersist(pluginId: string, records: JSON) {
-
-    }
 }

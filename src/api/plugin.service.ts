@@ -13,7 +13,7 @@ import type {
     PluginSummary,
 } from '../domain/protocol/plugin-catalog.protocol';
 
-class PluginBackendService {
+class PluginService {
     /**
     * 注册插件清单到后端。
     */
@@ -65,10 +65,10 @@ class PluginBackendService {
     }
 
     /**
-     * 获取所有插件设置（单文件存储）。
+     * 获取设置文件（单文件存储）。
      */
-    async getAllPluginSettings(): Promise<ApiResponse<Record<string, unknown>>> {
-        return await api.invokeApi<Record<string, unknown>>('get_all_plugin_settings');
+    async getAllPluginSettings(): Promise<ApiResponse<Record<string, any>>> {
+        return await api.invokeApi<Record<string, any>>('get_all_plugin_settings');
     }
 
     /**
@@ -98,4 +98,4 @@ class PluginBackendService {
     }
 }
 
-export default new PluginBackendService();
+export default new PluginService();

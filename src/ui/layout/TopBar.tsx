@@ -3,6 +3,7 @@ import { X, Minus, Copy, ChevronDown, Tally1, Settings } from "lucide-react";
 import { getCurrentWindow } from "@tauri-apps/api/window"
 import { coreRuntime } from "@/core";
 import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
+import lifecycleTrigger from "@/lib/lifecycleTrigger";
 
 export default () => {
     const appWindow = getCurrentWindow();
@@ -17,6 +18,7 @@ export default () => {
 
     const closeApp = async () => {
         await coreRuntime.shutdown();
+        await lifecycleTrigger.shutdownClose();
         alert("清理完成");
         appWindow.close();
     }
@@ -31,7 +33,7 @@ export default () => {
             style={{ WebkitAppRegion: 'drag' } as CSSProperties}
         >
             {/* 窗口标题（可选） */}
-            <img src="src/assets/tauri.svg" className="w-5 h-5 ml-2"/>
+            <img src="src/assets/tauri.svg" className="w-5 h-5 ml-2" />
             <span className="ml-2 text-sm font-medium">Plug Box</span>
 
             {/* 窗口控制按钮 - 靠右 */}

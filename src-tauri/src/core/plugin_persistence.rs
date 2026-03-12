@@ -4,21 +4,34 @@
 /// 2) storage：按插件分文件存储，文件名由插件 ID 安全转换得到。
 use serde_json::{Map, Value};
 use std::fs;
+use std::hash::Hash;
 use std::path::{Path, PathBuf};
 
-/// 读取全部插件 settings。
+use crate::core::SettingsDTO;
+
+/// 读取整个settings。
 pub fn read_all_plugin_settings() -> Result<Map<String, Value>, String> {
     let path = settings_file_path()?;
     read_json_object(&path)
 }
 
-/// 写入某个插件 settings 项。
+/// 写入某个插件单个 settings 项。
 pub fn write_plugin_setting(plugin_id: &str, key: &str, value: Value) -> Result<(), String> {
     let scoped_key = format!("{}.{}", plugin_id, key);
     let path = settings_file_path()?;
     let mut data = read_json_object(&path)?;
     data.insert(scoped_key, value);
     write_json_object(&path, &data)
+}
+
+/// 写入多个 settings 项。
+pub fn write_settings(data: Vec<SettingsDTO>) -> Result<(), String> {
+    let path = settings_file_path()?;
+    let mut file = read_json_object(&path)?;
+    for it in data.into_iter() {
+        file.insert(it.key, it.value);
+    }
+    write_json_object(&path, &file)
 }
 
 /// 读取某个插件 storage 快照。
@@ -49,14 +62,9 @@ fn settings_file_path() -> Result<PathBuf, String> {
     Ok(path)
 }
 
-fn storage_dir_path() -> Result<PathBuf, String> {
+fn plugin_storage_file_path(plugin_id: &str) -> Result<PathBuf, String> {
     let mut path = persistence_root()?;
     path.push("storage");
-    Ok(path)
-}
-
-fn plugin_storage_file_path(plugin_id: &str) -> Result<PathBuf, String> {
-    let mut path = storage_dir_path()?;
     path.push(format!("{}.json", sanitize_plugin_id(plugin_id)));
     Ok(path)
 }

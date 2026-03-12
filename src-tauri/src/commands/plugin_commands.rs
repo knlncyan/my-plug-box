@@ -31,21 +31,6 @@ pub fn register_js_plugin(
     }
 }
 
-// #[command]
-// pub fn register_view_meta(
-//     manager: State<'_, Mutex<PluginManager>>,
-//     view: ViewMeta,
-// ) -> ApiResponse<()> {
-//     let mut mgr = match manager.lock() {
-//         Ok(mgr) => mgr,
-//         Err(_) => return lock_error(),
-//     };
-//     match mgr.register_view(view) {
-//         Ok(resp) => resp,
-//         Err(err) => ApiResponse::error(err),
-//     }
-// }
-
 #[command]
 pub fn register_command_meta(
     manager: State<'_, Mutex<PluginManager>>,
@@ -71,17 +56,6 @@ pub fn get_plugin_list(
     };
     ApiResponse::success(mgr.list_plugins(), "Ok".to_string())
 }
-
-// #[command]
-// pub fn get_registered_views(
-//     manager: State<'_, Mutex<PluginManager>>,
-// ) -> ApiResponse<Vec<ViewMeta>> {
-//     let mgr = match manager.lock() {
-//         Ok(mgr) => mgr,
-//         Err(_) => return lock_error(),
-//     };
-//     ApiResponse::success(mgr.get_all_views(), "Ok".to_string())
-// }
 
 #[command]
 pub fn get_registered_commands(

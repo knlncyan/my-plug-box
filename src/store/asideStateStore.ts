@@ -1,5 +1,6 @@
 import initService from '@/api/init.service';
 import pluginService from '@/api/plugin.service';
+import { debounce } from 'lodash';
 import { create } from 'zustand';
 
 
@@ -78,3 +79,9 @@ export const useAsideStateStore = create<AsideState>()((set, get) => ({
         }
     },
 }));
+
+const debouncePersist = debounce(() => {
+    useAsideStateStore.getState().persist();
+}, 800)
+
+useAsideStateStore.subscribe(debouncePersist);

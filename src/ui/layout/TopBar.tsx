@@ -1,9 +1,11 @@
 import { CSSProperties } from "react";
 import { X, Minus, Copy, ChevronDown, Tally1, Settings } from "lucide-react";
 import { getCurrentWindow } from "@tauri-apps/api/window"
-import { coreRuntime } from "@/core";
+import { coreRuntime, useCoreRuntime } from "@/core";
 import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
 import lifecycleTrigger from "@/lib/lifecycleTrigger";
+import { useMainViewStore } from "@/store/mainViewStore";
+import { groupBy, keyBy } from "lodash";
 
 export default () => {
     const appWindow = getCurrentWindow();
@@ -42,8 +44,8 @@ export default () => {
                 style={{ WebkitAppRegion: 'no-drag' } as CSSProperties}
             >
                 {/* 设置 */}
-                <SettingsDialog />
-                <Tally1 className="w-6 text-neutral-400 mr-[-16px]" />
+                {/* <SettingsDialog />
+                <Tally1 className="w-6 text-neutral-400 mr-[-16px]" /> */}
                 {/* 最小化到托盘 */}
                 <button
                     onClick={minimizeToTray}
@@ -72,26 +74,23 @@ export default () => {
                     onClick={closeApp}
                     className="flex h-8 w-8 items-center justify-center rounded hover:bg-red-400"
                 >
-                    <X className="h-3.5 w-3.5 " />
+                    <X className="h-4 w-4 " />
                 </button>
             </div>
         </div>
     )
 }
 
-// TODO: 日后完善
-const SettingsDialog = () => {
+const CommandPalette = () => {
+    const { commands, plugins } = useCoreRuntime();
+    const commandsGroup = groupBy(commands.sort((a, b) => (a.description.localeCompare(b.description))), 'pluginId');
+
     return (
-        <Dialog>
-            <DialogTrigger>
-                <button
-                    // onClick={}
-                    className="flex h-8 w-8 items-center justify-center rounded hover:bg-black/10"
-                >
-                    <Settings className="h-3.5 w-3.5 " />
-                </button>
-            </DialogTrigger>
-            <DialogContent></DialogContent>
-        </Dialog>
+        <button
+           
+            className="flex h-8 w-8 items-center justify-center rounded hover:bg-black/10"
+        >
+            <Settings className="h-3.5 w-3.5 " />
+        </button>
     )
 }

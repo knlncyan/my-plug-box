@@ -10,6 +10,7 @@ lifecycleTrigger.register(async () => {
     await useAsideStateStore.getState().hydrate();
 }, 'init');
 
+// 不可靠的保存
 lifecycleTrigger.register(async () => {
     await useAsideStateStore.getState().persist();
 }, 'shutdown');

@@ -197,12 +197,13 @@ export default () => {
                         <div className="flex p-1 items-center gap-1.5  text-xs text-neutral-500 border-t border-neutral-150">
                             <Boxes className="w-4 h-4" /><span>{plugins.length}</span>
                             <Activity className="w-4 h-4" /><span>{activatedPlugins.length}</span>
-                            <button
+                            {/* <button
                                 className='flex ml-auto h-8 w-8 cursor-pointer items-center justify-center rounded hover:bg-black/10'
                                 onClick={() => setViewContent(<PluginManager />)}
                             >
                                 <Settings2 className="h-4 w-4 " />
-                            </button>
+                            </button> */}
+                            <SettingCenter />
                         </div>
                     </>
                 )
@@ -230,18 +231,16 @@ export default () => {
 
                         ))}
                     </div>
-                    <div className='flex w-10 h-10 items-center justify-center my-1'>
+                    {/* <div className='flex w-10 h-10 items-center justify-center my-1'>
                         <button
                             className='flex w-8 h-8  cursor-pointer items-center justify-center rounded hover:bg-black/10'
                             onClick={() => setViewContent(<PluginManager />)}
                         >
                             <Settings2 className="h-4 w-4 " />
                         </button>
-                    </div>
-
+                    </div> */}
+                    <SettingCenter />
                 </>
-
-
             }
 
         </div >
@@ -319,6 +318,82 @@ const MoreOptions = () => {
                 <DropdownMenuCheckboxItem
                     checked={hiddenBackend}
                     onCheckedChange={() => changeHiddenBackend()}
+                >
+                    Hiden Backend Plugs
+                </DropdownMenuCheckboxItem>
+            </DropdownMenuContent>
+        </DropdownMenu>
+    )
+}
+
+const SettingCenter = () => {
+    const hiddenAside = useAsideStateStore(it => it.hiddenAside);
+
+    return (
+        <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+                {hiddenAside
+                    ? <div className='flex ml-auto w-10 h-10 items-center justify-center my-1'>
+                        <button className='flex  w-8 h-8  cursor-pointer items-center justify-center rounded hover:bg-black/10' >
+                            <Settings2 className="h-4 w-4 " />
+                        </button>
+                    </div>
+                    : <button className='flex ml-auto w-8 h-8  cursor-pointer items-center justify-center rounded hover:bg-black/10' >
+                        <Settings2 className="h-4 w-4 " />
+                    </button>
+                }
+            </DropdownMenuTrigger>
+            <DropdownMenuContent className="w-40" side={`${hiddenAside ? 'right' : 'top'}`} align={`${hiddenAside ? 'end' : 'center'}`} sideOffset={hiddenAside ? 10 : 4}>
+                <DropdownMenuGroup>
+                    <DropdownMenuLabel className="text-xs text-neutral-500">Appearance</DropdownMenuLabel>
+
+                    <DropdownMenuSub>
+                        <DropdownMenuSubTrigger>Grid View</DropdownMenuSubTrigger>
+                        <DropdownMenuPortal>
+                            <DropdownMenuSubContent>
+                                <DropdownMenuCheckboxItem
+                                // checked={plugViewMode == 'grid-small'}
+                                // onCheckedChange={() => changePlugViewMode('grid-small')}
+                                >
+                                    Small
+                                </DropdownMenuCheckboxItem>
+                                <DropdownMenuCheckboxItem
+                                // checked={plugViewMode == 'grid-medium'}
+                                // onCheckedChange={() => changePlugViewMode('grid-medium')}
+                                >
+                                    Medium
+                                </DropdownMenuCheckboxItem>
+                                {/* <DropdownMenuSeparator />
+                                <DropdownMenuItem>Webhook</DropdownMenuItem> */}
+                            </DropdownMenuSubContent>
+                        </DropdownMenuPortal>
+                    </DropdownMenuSub>
+                    <DropdownMenuCheckboxItem
+                    // checked={plugViewMode == 'list'}
+                    // onCheckedChange={() => changePlugViewMode('list')}
+                    >
+                        List View
+                    </DropdownMenuCheckboxItem>
+                </DropdownMenuGroup>
+                <DropdownMenuGroup>
+                    <DropdownMenuLabel className="text-xs text-neutral-500">Order</DropdownMenuLabel>
+                    <DropdownMenuCheckboxItem
+                    // checked={plugOrderKey == 'activate'}
+                    // onCheckedChange={() => changePlugOrderKey('activate')}
+                    >
+                        Activate First
+                    </DropdownMenuCheckboxItem>
+                    <DropdownMenuCheckboxItem
+                    // checked={plugOrderKey == 'name'}
+                    // onCheckedChange={() => changePlugOrderKey('name')}
+                    >
+                        Name First
+                    </DropdownMenuCheckboxItem>
+                </DropdownMenuGroup>
+                <DropdownMenuSeparator />
+                <DropdownMenuCheckboxItem
+                // checked={hiddenBackend}
+                // onCheckedChange={() => changeHiddenBackend()}
                 >
                     Hiden Backend Plugs
                 </DropdownMenuCheckboxItem>

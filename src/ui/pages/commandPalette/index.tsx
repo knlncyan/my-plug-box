@@ -9,6 +9,7 @@ import {
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group"
 import { useCoreRuntime } from "@/core"
 import { createPopup } from "@/lib/zustand"
+import { groupBy } from "lodash"
 import {
     Search,
     X,
@@ -23,17 +24,16 @@ export default () => {
     const [query, setQuery] = useState('');
     const { open } = useCommandPaletteDialog.use();
 
-    const filteredCommands = useMemo(() => {
+    const commandGroups = useMemo(() => {
         const normalized = query.trim().toLowerCase();
         const list = [...commands].sort((a, b) => a.id.localeCompare(b.id));
-        if (!normalized) return list;
-        return list.filter((command) => {
-            return (
-                command.id.toLowerCase().includes(normalized) ||
-                command.description.toLowerCase().includes(normalized) ||
-                command.pluginId.toLowerCase().includes(normalized)
-            );
-        });
+        if (!normalized) return groupBy(list, 'pluginId');
+        const filteredCommands = list.filter((command) => (
+            command.id.toLowerCase().includes(normalized) ||
+            command.description.toLowerCase().includes(normalized) ||
+            command.pluginId.toLowerCase().includes(normalized)
+        ));
+        return groupBy(filteredCommands, 'pluginId');
     }, [commands, query]);
 
     async function runCommand(commandId: string): Promise<void> {
@@ -73,13 +73,16 @@ export default () => {
 
                 <CommandList>
                     <CommandEmpty>No results found.</CommandEmpty>
-                    <CommandGroup>
-                        {filteredCommands.map(it => (
-                            <CommandItem className="cursor-pointer" key={it.id} onSelect={() => runCommand(it.id)}>
-                                <span>{it.description}</span>
-                            </CommandItem>
-                        ))}
-                    </CommandGroup>
+                    {Object.entries(commandGroups).map(([pluginId, items]) => (
+                        <CommandGroup key={pluginId} heading={pluginId}>
+                            {items.map(it => (
+                                <CommandItem className="cursor-pointer" key={it.id} onSelect={() => runCommand(it.id)}>
+                                    <span>{it.description}</span>
+                                </CommandItem>
+                            ))}
+                        </CommandGroup>
+                    ))}
+
                     {/* <CommandGroup heading="Suggestions"> */}
                     {/* <CommandItem>
                         <Calendar />

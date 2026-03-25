@@ -3,10 +3,11 @@ import { Activity, Boxes, Ellipsis, LayoutGrid, PanelLeftClose, PanelLeftOpen, S
 import { useCallback, useMemo, useState } from "react";
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
 import { Item, ItemContent, ItemDescription, ItemGroup, ItemMedia, ItemTitle } from "@/components/ui/item";
-import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuGroup, DropdownMenuLabel, DropdownMenuPortal, DropdownMenuSeparator, DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { useMainViewStore } from "@/store/mainViewStore";
-import PluginManager from "../pages/pluginManager";
+import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuPortal, DropdownMenuSeparator, DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { useAppViewStore } from "@/store/appViewStore";
 import { AsideBarKeys, useAsideStateStore } from "@/store/asideStateStore";
+import { useCommandPaletteDialog } from "../pages/commandPalette";
+import PluginManager from "../pages/pluginManager";
 
 export default () => {
     const { plugins, activeViewPluginId, setActiveView } = useCoreRuntime();
@@ -24,7 +25,7 @@ export default () => {
     const plugOrderKey = useAsideStateStore(it => it.plugOrderKey);
     // 插件搜索
     const [search, setSearch] = useState<string>('');
-    const setViewContent = useMainViewStore(state => state.setViewContent);
+    const setMainViewContent = useAppViewStore(state => state.setMainViewContent);
 
     const selectViewPlugin = useCallback(
         (viewId: string) => {
@@ -37,8 +38,7 @@ export default () => {
         const activatedPlugins = plugins.filter(it => it.status == 'Activated');
         // 过滤
         const filteredPlugins = plugins.filter(it => {
-            if (hiddenBackend) return !!it.view;
-            return it.name.includes(search) || it.description?.includes(search)
+            return (!hiddenBackend || it.view) && (it.name.includes(search) || it.description?.includes(search))
         });
         // 排序
         const handledPlugins = plugOrderKey == 'activate'
@@ -60,12 +60,11 @@ export default () => {
     // 插件被选中
     const handlePlugSelect = (pluginId: string) => {
         selectViewPlugin(pluginId);
-        setViewContent(null);
+        setMainViewContent(null);
     }
 
     return (
         <div className={`flex flex-col ${hiddenAside ? 'w-10' : 'w-[25%] max-w-75'} border-r border-neutral-200 bg-white`}>
-
             <div className={`flex ${hiddenAside && 'flex-col'}  p-1`}>
                 {asideBarKey == 'search'
                     ? <InputGroup className="h-8">
@@ -197,12 +196,6 @@ export default () => {
                         <div className="flex p-1 items-center gap-1.5  text-xs text-neutral-500 border-t border-neutral-150">
                             <Boxes className="w-4 h-4" /><span>{plugins.length}</span>
                             <Activity className="w-4 h-4" /><span>{activatedPlugins.length}</span>
-                            {/* <button
-                                className='flex ml-auto h-8 w-8 cursor-pointer items-center justify-center rounded hover:bg-black/10'
-                                onClick={() => setViewContent(<PluginManager />)}
-                            >
-                                <Settings2 className="h-4 w-4 " />
-                            </button> */}
                             <SettingCenter />
                         </div>
                     </>
@@ -231,18 +224,9 @@ export default () => {
 
                         ))}
                     </div>
-                    {/* <div className='flex w-10 h-10 items-center justify-center my-1'>
-                        <button
-                            className='flex w-8 h-8  cursor-pointer items-center justify-center rounded hover:bg-black/10'
-                            onClick={() => setViewContent(<PluginManager />)}
-                        >
-                            <Settings2 className="h-4 w-4 " />
-                        </button>
-                    </div> */}
                     <SettingCenter />
                 </>
             }
-
         </div >
     )
 }
@@ -270,29 +254,29 @@ const MoreOptions = () => {
             <DropdownMenuContent className="w-40" side={`${hiddenAside ? 'right' : 'bottom'}`} align={`${hiddenAside ? 'center' : 'start'}`} sideOffset={hiddenAside ? 10 : 4}>
                 <DropdownMenuGroup>
                     <DropdownMenuLabel className="text-xs text-neutral-500">Appearance</DropdownMenuLabel>
-
                     <DropdownMenuSub>
-                        <DropdownMenuSubTrigger>Grid View</DropdownMenuSubTrigger>
-                        <DropdownMenuPortal>
+                        <DropdownMenuSubTrigger className="cursor-pointer">Grid View</DropdownMenuSubTrigger>
+                        <DropdownMenuPortal >
                             <DropdownMenuSubContent>
                                 <DropdownMenuCheckboxItem
+                                    className="cursor-pointer"
                                     checked={plugViewMode == 'grid-small'}
                                     onCheckedChange={() => changePlugViewMode('grid-small')}
                                 >
                                     Small
                                 </DropdownMenuCheckboxItem>
                                 <DropdownMenuCheckboxItem
+                                    className="cursor-pointer"
                                     checked={plugViewMode == 'grid-medium'}
                                     onCheckedChange={() => changePlugViewMode('grid-medium')}
                                 >
                                     Medium
                                 </DropdownMenuCheckboxItem>
-                                {/* <DropdownMenuSeparator />
-                                <DropdownMenuItem>Webhook</DropdownMenuItem> */}
                             </DropdownMenuSubContent>
                         </DropdownMenuPortal>
                     </DropdownMenuSub>
                     <DropdownMenuCheckboxItem
+                        className="cursor-pointer"
                         checked={plugViewMode == 'list'}
                         onCheckedChange={() => changePlugViewMode('list')}
                     >
@@ -302,12 +286,14 @@ const MoreOptions = () => {
                 <DropdownMenuGroup>
                     <DropdownMenuLabel className="text-xs text-neutral-500">Order</DropdownMenuLabel>
                     <DropdownMenuCheckboxItem
+                        className="cursor-pointer"
                         checked={plugOrderKey == 'activate'}
                         onCheckedChange={() => changePlugOrderKey('activate')}
                     >
                         Activate First
                     </DropdownMenuCheckboxItem>
                     <DropdownMenuCheckboxItem
+                        className="cursor-pointer"
                         checked={plugOrderKey == 'name'}
                         onCheckedChange={() => changePlugOrderKey('name')}
                     >
@@ -316,6 +302,7 @@ const MoreOptions = () => {
                 </DropdownMenuGroup>
                 <DropdownMenuSeparator />
                 <DropdownMenuCheckboxItem
+                    className="cursor-pointer"
                     checked={hiddenBackend}
                     onCheckedChange={() => changeHiddenBackend()}
                 >
@@ -328,76 +315,37 @@ const MoreOptions = () => {
 
 const SettingCenter = () => {
     const hiddenAside = useAsideStateStore(it => it.hiddenAside);
-
+    const setMainViewContent = useAppViewStore(state => state.setMainViewContent);
+    
     return (
         <DropdownMenu>
             <DropdownMenuTrigger asChild>
                 {hiddenAside
                     ? <div className='flex ml-auto w-10 h-10 items-center justify-center my-1'>
-                        <button className='flex  w-8 h-8  cursor-pointer items-center justify-center rounded hover:bg-black/10' >
+                        <button className='flex  w-8 h-8 cursor-pointer items-center justify-center rounded hover:bg-black/10' >
                             <Settings2 className="h-4 w-4 " />
                         </button>
                     </div>
-                    : <button className='flex ml-auto w-8 h-8  cursor-pointer items-center justify-center rounded hover:bg-black/10' >
+                    : <button className='flex ml-auto w-8 h-8 cursor-pointer items-center justify-center rounded hover:bg-black/10' >
                         <Settings2 className="h-4 w-4 " />
                     </button>
                 }
             </DropdownMenuTrigger>
             <DropdownMenuContent className="w-40" side={`${hiddenAside ? 'right' : 'top'}`} align={`${hiddenAside ? 'end' : 'center'}`} sideOffset={hiddenAside ? 10 : 4}>
-                <DropdownMenuGroup>
-                    <DropdownMenuLabel className="text-xs text-neutral-500">Appearance</DropdownMenuLabel>
-
-                    <DropdownMenuSub>
-                        <DropdownMenuSubTrigger>Grid View</DropdownMenuSubTrigger>
-                        <DropdownMenuPortal>
-                            <DropdownMenuSubContent>
-                                <DropdownMenuCheckboxItem
-                                // checked={plugViewMode == 'grid-small'}
-                                // onCheckedChange={() => changePlugViewMode('grid-small')}
-                                >
-                                    Small
-                                </DropdownMenuCheckboxItem>
-                                <DropdownMenuCheckboxItem
-                                // checked={plugViewMode == 'grid-medium'}
-                                // onCheckedChange={() => changePlugViewMode('grid-medium')}
-                                >
-                                    Medium
-                                </DropdownMenuCheckboxItem>
-                                {/* <DropdownMenuSeparator />
-                                <DropdownMenuItem>Webhook</DropdownMenuItem> */}
-                            </DropdownMenuSubContent>
-                        </DropdownMenuPortal>
-                    </DropdownMenuSub>
-                    <DropdownMenuCheckboxItem
-                    // checked={plugViewMode == 'list'}
-                    // onCheckedChange={() => changePlugViewMode('list')}
-                    >
-                        List View
-                    </DropdownMenuCheckboxItem>
-                </DropdownMenuGroup>
-                <DropdownMenuGroup>
-                    <DropdownMenuLabel className="text-xs text-neutral-500">Order</DropdownMenuLabel>
-                    <DropdownMenuCheckboxItem
-                    // checked={plugOrderKey == 'activate'}
-                    // onCheckedChange={() => changePlugOrderKey('activate')}
-                    >
-                        Activate First
-                    </DropdownMenuCheckboxItem>
-                    <DropdownMenuCheckboxItem
-                    // checked={plugOrderKey == 'name'}
-                    // onCheckedChange={() => changePlugOrderKey('name')}
-                    >
-                        Name First
-                    </DropdownMenuCheckboxItem>
-                </DropdownMenuGroup>
+                <DropdownMenuItem className="cursor-pointer" onSelect={() => useCommandPaletteDialog.show()}>
+                    Command Palette
+                </DropdownMenuItem>
                 <DropdownMenuSeparator />
-                <DropdownMenuCheckboxItem
-                // checked={hiddenBackend}
-                // onCheckedChange={() => changeHiddenBackend()}
-                >
-                    Hiden Backend Plugs
-                </DropdownMenuCheckboxItem>
+                <DropdownMenuItem className="cursor-pointer" onSelect={() => setMainViewContent(<PluginManager />)}>
+                    Plug Manager
+                </DropdownMenuItem>
+                <DropdownMenuItem className="cursor-pointer">
+                    Keyboard Shortcuts
+                </DropdownMenuItem>
+                <DropdownMenuItem className="cursor-pointer">
+                    Settings
+                </DropdownMenuItem>
             </DropdownMenuContent>
-        </DropdownMenu>
+        </DropdownMenu >
     )
 }

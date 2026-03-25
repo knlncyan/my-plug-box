@@ -4,7 +4,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window"
 import { coreRuntime, useCoreRuntime } from "@/core";
 import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
 import lifecycleTrigger from "@/lib/lifecycleTrigger";
-import { useMainViewStore } from "@/store/mainViewStore";
+import { useAppViewStore } from "@/store/appViewStore";
 import { groupBy, keyBy } from "lodash";
 
 export default () => {

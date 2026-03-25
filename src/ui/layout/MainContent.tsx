@@ -1,12 +1,12 @@
 import { Spinner } from "@/components/ui/spinner";
 import { useCoreRuntime } from "@/core";
 import { PluginViewLoader } from "@/core/PluginRenderer";
-import { useMainViewStore } from "@/store/mainViewStore";
+import { useAppViewStore } from "@/store/appViewStore";
 import { useMemo } from "react";
 
 export default () => {
     const { loading, ready, error, plugins, activeViewPluginId } = useCoreRuntime();
-    const viewContent = useMainViewStore(state => state.viewContent);
+    const mainViewContent = useAppViewStore(state => state.mainViewContent);
 
     const activeView = useMemo(
         () => plugins.find((plugin) => plugin.id === activeViewPluginId)?.view ?? null,
@@ -23,8 +23,8 @@ export default () => {
 
     return (
         <>
-            {!!viewContent
-                ? viewContent
+            {!!mainViewContent
+                ? mainViewContent
                 : activeView
                     ? <PluginViewLoader view={activeView} />
                     : <div className="flex h-full items-center justify-center text-sm text-neutral-500">

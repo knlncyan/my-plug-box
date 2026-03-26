@@ -1,4 +1,4 @@
-﻿/**
+/**
  * 插件命令 Worker 入口：
  * 1) 运行在 Worker 环境，隔离插件命令执行上下文。
  * 2) 通过消息协议向宿主请求能力（命令、视图、事件、设置、存储等）。
@@ -21,16 +21,14 @@ import type {
     WorkerResponseMessage,
 } from '../../domain/worker';
 import type {
-    BuiltinPluginModule,
+    PluginModule,
     CommandExecutionContext,
 } from '../../domain/protocol/plugin-runtime.protocol';
-import {
-    getPluginModuleLoaderById,
-    resolvePluginModuleKey,
-} from '../utils/pluginResourceLoader';
+
 
 let pluginId = '';
-let pluginModule: BuiltinPluginModule | null = null;
+let moduleUrl = '';
+let pluginModule: PluginModule | null = null;
 let activated = false;
 let settingsSnapshot: Record<string, unknown> = {};
 let storageSnapshot: Record<string, unknown> = {};
@@ -38,29 +36,32 @@ let activeTrace: string[] = [];
 
 const pendingRequests = new Map<string, PendingRequest>();
 const capabilityProxyById = new Map<string, CapabilityContract>();
-const builtinCapabilityCache = new Map<string, CapabilityContract>();
+const coreCapabilityCache = new Map<string, CapabilityContract>();
 const eventListeners = new Map<string, Set<(payload: unknown) => void>>();
 const settingWatchers = new Map<string, Set<(value: unknown) => void>>();
 let requestSerial = 0;
 
-async function ensurePluginModule(): Promise<BuiltinPluginModule> {
+async function ensurePluginModule(): Promise<PluginModule> {
     if (pluginModule) return pluginModule;
     if (!pluginId) {
         throw new Error('Worker not initialized: missing pluginId');
     }
 
-    const moduleKey = resolvePluginModuleKey(pluginId);
-    const loader = getPluginModuleLoaderById(pluginId);
-
-    if (!loader) {
-        throw new Error(`Plugin module not found: ${moduleKey}`);
+    if (!moduleUrl) {
+        throw new Error(`Worker not initialized: missing moduleUrl for ${pluginId}`);
     }
 
-    const loaded = await loader();
+    const loaded = await import(/* @vite-ignore */ moduleUrl);
     if (!loaded.default) {
-        throw new Error(`Plugin module default export missing: ${moduleKey}`);
+        throw new Error(`Plugin module default export missing: ${moduleUrl}`);
     }
-    pluginModule = loaded.default;
+
+    const module = loaded.default as PluginModule;
+    if (module.pluginId !== pluginId) {
+        throw new Error(`Plugin id mismatch: manifest="${pluginId}", module="${module.pluginId}"`);
+    }
+
+    pluginModule = module;
     return pluginModule;
 }
 
@@ -105,8 +106,8 @@ function notifySettingWatchers(key: string, value: unknown): void {
     }
 }
 
-function resolveBuiltinCapability(capabilityId: string): CapabilityContract | null {
-    const cached = builtinCapabilityCache.get(capabilityId);
+function resolveBaseCapability(capabilityId: string): CapabilityContract | null {
+    const cached = coreCapabilityCache.get(capabilityId);
     if (cached) return cached;
 
     let capability: CapabilityContract | null = null;
@@ -209,7 +210,7 @@ function resolveBuiltinCapability(capabilityId: string): CapabilityContract | nu
     }
 
     if (!capability) return null;
-    builtinCapabilityCache.set(capabilityId, capability);
+    coreCapabilityCache.set(capabilityId, capability);
     return capability;
 }
 
@@ -221,9 +222,9 @@ const hostApi: PluginHostAPI = {
         return (await callHost(method, params)) as T;
     },
     get: <K extends string>(capabilityId: K): CapabilityById<K> => {
-        const builtin = resolveBuiltinCapability(capabilityId);
-        if (builtin) {
-            return builtin as CapabilityById<K>;
+        const baseCapability = resolveBaseCapability(capabilityId);
+        if (baseCapability) {
+            return baseCapability as CapabilityById<K>;
         }
 
         const existing = capabilityProxyById.get(capabilityId);
@@ -328,10 +329,16 @@ async function handleHostRequest(msg: HostRequestMessage): Promise<void> {
             case 'init': {
                 const payload = msg.payload as Record<string, unknown>;
                 const nextPluginId = payload.pluginId;
+                const nextModuleUrl = payload.moduleUrl;
                 if (typeof nextPluginId !== 'string' || nextPluginId.length === 0) {
                     throw new Error('Worker init missing pluginId');
                 }
+                if (typeof nextModuleUrl !== 'string' || nextModuleUrl.length === 0) {
+                    throw new Error('Worker init missing moduleUrl');
+                }
                 pluginId = nextPluginId;
+                moduleUrl = nextModuleUrl;
+                pluginModule = null;
                 settingsSnapshot = { ...(payload.settings as Record<string, unknown> ?? {}) };
                 storageSnapshot = { ...(payload.storage as Record<string, unknown> ?? {}) };
                 await ensurePluginModule();

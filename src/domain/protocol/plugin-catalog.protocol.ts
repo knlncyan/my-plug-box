@@ -1,4 +1,4 @@
-﻿/**
+/**
  * 插件目录/注册协议：
  * 对应插件清单、视图、命令以及后端 API 响应结构。
  */
@@ -44,7 +44,9 @@ export interface PluginSummary {
   view?: PluginViewManifest
 }
 
-export interface BuiltinPluginManifest extends Omit<PluginManifestDto, "view"> {
+export interface PluginManifest extends Omit<PluginManifestDto, "view"> {
   view?: Omit<PluginViewManifest, "pluginId">
   commands?: Omit<CommandMeta, "pluginId">[];
+  moduleUrl?: string;
+  viewUrl?: string;
 }

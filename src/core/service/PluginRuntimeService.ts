@@ -1,4 +1,4 @@
-﻿import { listen, type UnlistenFn } from '@tauri-apps/api/event';
+import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import service from '../../api/plugin.service';
 import type {
     ExecuteCommandOptions,
@@ -197,7 +197,7 @@ export class PluginRuntimeService {
 
     /**
      * 冷启动流程：
-     * 1) 注册内置插件元数据
+     * 1) 加载并注册外部插件元数据
      * 2) 启动状态监听
      * 3) 刷新目录并激活启动插件
      * 4) 同步 Worker 状态并注册后端事件监听
@@ -205,8 +205,8 @@ export class PluginRuntimeService {
     private async bootstrap(): Promise<void> {
         this.patch({ loading: true, error: null });
         try {
-            await this.deps.pluginAssetCatalogService.validateBuiltinModuleConsistency();
-            await this.deps.pluginAssetCatalogService.registerBuiltins();
+            await this.deps.pluginAssetCatalogService.validateManifestConsistency();
+            await this.deps.pluginAssetCatalogService.registerPlugins();
             await this.deps.pluginActivationService.start();
             await this.refreshAll();
             await this.activateStartupPlugins();

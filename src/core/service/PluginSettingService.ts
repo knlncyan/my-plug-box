@@ -1,9 +1,9 @@
-﻿import service from '../../api/plugin.service';
+import service from '../../api/plugin.service';
 import { PluginEventBus } from '../PluginEventBus';
 
 /**
  * 插件设置服务：
- * 1) 以平面键值维护全局与插件设置（如 global.theme、builtin.xxx.verbose）。
+ * 1) 以平面键值维护全局与插件设置（如 global.theme、plugin.xxx.verbose）。
  * 2) 提供插件作用域读取与持久化写入。
  */
 export class PluginSettingService {

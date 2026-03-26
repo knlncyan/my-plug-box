@@ -1,11 +1,11 @@
 /**
  * 插件视图渲染器（基于 iframe 沙箱）。
- * 说明：
- * 1) 每个视图在独立 iframe 内渲染，避免直接污染宿主 DOM。
- * 2) 视图通过 postMessage 向主线程请求 runtime 能力。
+ * 1) 每个视图运行在独立 iframe，避免直接污染宿主 DOM。
+ * 2) 视图通过 postMessage 请求主线程 runtime 能力。
  */
 import { Component, type ErrorInfo, type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { coreRuntime } from '.';
+import { getPluginViewUrl } from './utils/pluginResourceLoader';
 import type { PluginViewManifest } from '../domain/protocol/plugin-catalog.protocol';
 import type {
     PluginViewExecuteCommandPayload,
@@ -72,6 +72,12 @@ function buildSandboxViewUrl(view: PluginViewManifest): string {
     url.searchParams.set('viewId', view.id);
     url.searchParams.set('pluginId', view.pluginId);
     url.searchParams.set('props', JSON.stringify(view.props ?? {}));
+
+    const viewUrl = getPluginViewUrl(view.pluginId);
+    if (viewUrl) {
+        url.searchParams.set('viewUrl', viewUrl);
+    }
+
     return url.toString();
 }
 
@@ -185,6 +191,21 @@ function PluginSandboxFrame({ view }: Props) {
                         });
                         return;
                     }
+                    case 'activateForView': {
+                        const payload = asRecord(message.payload);
+                        const viewId = payload.viewId;
+                        if (typeof viewId !== 'string' || viewId.length === 0) {
+                            throw new Error('runtime bridge activateForView invalid viewId');
+                        }
+                        coreRuntime.setActiveView(viewId);
+                        postResponse(targetWindow, {
+                            type: 'plugin-view-runtime-response',
+                            requestId: message.requestId,
+                            success: true,
+                            result: null,
+                        });
+                        return;
+                    }
                     default:
                         throw new Error(`runtime bridge unsupported action: ${message.action}`);
                 }
@@ -231,7 +252,7 @@ function PluginSandboxFrame({ view }: Props) {
                 ref={iframeRef}
                 src={sandboxUrl}
                 title={`plugin-view-${view.id}`}
-                sandbox="allow-scripts allow-forms"
+                sandbox="allow-scripts allow-forms allow-same-origin"
                 className="h-full w-full border-0"
                 onLoad={() => setFrameError(null)}
                 onError={() => setFrameError('Failed to load plugin sandbox iframe')}

@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Worker 协议类型：定义宿主与插件 Worker 之间的消息结构。
  */
 export interface PendingRequest {
@@ -18,6 +18,7 @@ export type HostRequestAction = 'init' | 'activate' | 'deactivate' | 'execute-co
 
 export interface HostMessagePayload extends Record<string, unknown> {
     pluginId: string;
+    moduleUrl?: string;
 }
 
 export interface HostRequestMessage {

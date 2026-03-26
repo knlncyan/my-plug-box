@@ -1,8 +1,8 @@
-/**
+﻿/**
  * Built-in command palette plugin module.
  * Demonstrates startup/command/view activation hooks and provides command handlers.
  */
-import type { BuiltinPluginModule } from '../../domain/protocol/plugin-runtime.protocol';
+import type { PluginModule } from '../../domain/protocol/plugin-runtime.protocol';
 
 let verboseSettingWatcher: { dispose(): void } | null = null;
 
@@ -13,7 +13,7 @@ function printHookNotes(): void {
     console.info(' - onView:<viewId> / onView:*: plugin can be activated when a target view is focused.');
 }
 
-const plugin: BuiltinPluginModule = {
+const plugin: PluginModule = {
     pluginId: 'builtin.command-palette',
     activate: async (api) => {
         const storage = api.get('storage');
@@ -61,3 +61,4 @@ const plugin: BuiltinPluginModule = {
 };
 
 export default plugin;
+

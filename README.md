@@ -7,6 +7,7 @@
 - Rust 端负责插件元数据、生命周期状态与持久化。
 - 前端负责运行时编排、命令调度、Worker/视图沙箱与 UI 渲染。
 - 通过能力注册表（Capability Registry）扩展插件可调用宿主能力。
+- 支持外部插件：public/plugins/manifest.json 中列出的插件包由 plugin.json、打包好的 index.js 与视图 bundle（view/index.*）组成，文档 docs/external-plugin-packaging.zh-CN.md 与 docs/plugin-development.zh-CN.md 说明如何打包并写入 manifest。
 
 ## 架构概览
 
@@ -101,10 +102,11 @@ pnpm build
 
 ## 文档
 
-- 插件清单规范（中文）：`docs/plugin-json.zh-CN.md`
-- 插件开发手册（中文）：`docs/plugin-development.zh-CN.md`
-- Core 运行时说明（中文）：`docs/core-runtime.zh-CN.md`
-- 能力注册表示例：`docs/xxx.md`
+- 插件清单规范（中文）：docs/plugin-json.zh-CN.md
+- 插件开发手册（中文）：docs/plugin-development.zh-CN.md
+- 外部插件打包指南（中文）：docs/external-plugin-packaging.zh-CN.md
+- Core 运行时说明（中文）：docs/core-runtime.zh-CN.md
+- 能力注册表示例：docs/xxx.md
 
 ## 说明
 

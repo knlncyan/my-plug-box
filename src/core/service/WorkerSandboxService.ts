@@ -1,4 +1,4 @@
-﻿import type {
+import type {
     HostEventMessage,
     HostMessagePayload,
     HostRequestAction,
@@ -13,12 +13,14 @@ import { CapabilityRegistry } from '../CapabilityRegistry';
 import { PluginDisposable } from '../PluginDisposable';
 import { PluginEventBus } from '../PluginEventBus';
 import { PluginActivationService } from './PluginActivationService';
+import { PluginAssetCatalogService } from './PluginAssetCatalogService';
 import { PluginSettingService } from './PluginSettingService';
 import { PluginStorageService } from './PluginStorageService';
 
 interface WorkerSandboxServiceDeps {
     capabilityRegistry: CapabilityRegistry;
     pluginActivationService: PluginActivationService;
+    pluginAssetCatalogService: PluginAssetCatalogService;
     pluginEventBus: PluginEventBus;
     pluginDisposable: PluginDisposable;
     pluginStorageService: PluginStorageService;
@@ -51,7 +53,7 @@ export class WorkerSandboxService {
     private readonly workerMethodHandlers = new Map<string, WorkerMethodHandler>();
     private requestSerial = 0;
     private commandExecutor: CommandExecutor | null = null;
-    private viewActivator: ((pluginId: string) => void) | null = null;
+    private viewActivator: ((viewId: string) => void) | null = null;
 
     constructor(private readonly deps: WorkerSandboxServiceDeps) {
         this.registerBuiltinWorkerMethods();
@@ -87,7 +89,7 @@ export class WorkerSandboxService {
     /**
      * 注册“激活视图”回调（由 runtime 注入）。
      */
-    setViewActivator(activate: (pluginId: string) => void): void {
+    setViewActivator(activate: (viewId: string) => void): void {
         this.viewActivator = activate;
     }
 
@@ -241,6 +243,15 @@ export class WorkerSandboxService {
             throw new Error(`Cannot create sandbox for inactive plugin: ${pluginId}`);
         }
 
+        const manifest = this.deps.pluginAssetCatalogService.getManifestById(pluginId);
+        if (!manifest) {
+            throw new Error(`Plugin manifest not found: ${pluginId}`);
+        }
+
+        if (!manifest.moduleUrl || manifest.moduleUrl.trim().length === 0) {
+            throw new Error(`Plugin moduleUrl missing: ${pluginId}`);
+        }
+
         // Worker 入口文件在 src/core/sandbox/worker.ts。
         const worker = new Worker(new URL('../sandbox/worker.ts', import.meta.url), {
             type: 'module',
@@ -265,6 +276,7 @@ export class WorkerSandboxService {
         const settings = await this.deps.pluginSettingService.getSnapshot(pluginId);
         await this.callWorker(record, 'init', {
             pluginId,
+            moduleUrl: manifest.moduleUrl,
             storage,
             settings,
         });

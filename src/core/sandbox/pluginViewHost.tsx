@@ -1,10 +1,9 @@
-﻿/**
- * 主界面渲染，采用沙箱隔离
+/**
+ * 主界面中的插件视图沙箱宿主。
  */
 import { Component, type ComponentType, type ErrorInfo, type ReactNode, useEffect, useState } from 'react';
 import ReactDOM from 'react-dom/client';
 import '../../index.css';
-import { getPluginViewLoaderById, resolvePluginViewModuleKey } from '../utils/pluginResourceLoader';
 
 declare global {
     interface Window {
@@ -15,7 +14,8 @@ declare global {
 interface SandboxParams {
     viewId: string;
     pluginId: string;
-    // componentPath: string;
+    // 主线程通过 query 下发可直接加载的视图入口 URL。
+    viewUrl: string | null;
     props: Record<string, unknown>;
 }
 
@@ -55,7 +55,8 @@ function parseParams(): SandboxParams {
     const params = new URLSearchParams(window.location.search);
     const viewId = params.get('viewId') ?? '';
     const pluginId = params.get('pluginId') ?? '';
-    // const componentPath = params.get('componentPath') ?? '';
+    const viewUrlRaw = params.get('viewUrl');
+    const viewUrl = viewUrlRaw && viewUrlRaw.length > 0 ? viewUrlRaw : null;
     const rawProps = params.get('props') ?? '{}';
 
     let props: Record<string, unknown> = {};
@@ -68,8 +69,11 @@ function parseParams(): SandboxParams {
         props = {};
     }
 
-    return { viewId, pluginId, props };
+    return { viewId, pluginId, viewUrl, props };
 }
+
+// 用 Function 包装动态 import，避免 dev 服务器把 public 资源当源码模块预处理。
+const importByUrl = new Function('url', 'return import(url);') as (url: string) => Promise<{ default?: unknown }>;
 
 function App() {
     const [component, setComponent] = useState<ComponentType<Record<string, unknown>> | null>(null);
@@ -81,22 +85,16 @@ function App() {
         setParams(nextParams);
 
         async function loadComponent(): Promise<void> {
-            const moduleKey = resolvePluginViewModuleKey(nextParams.pluginId);
-            const loader = getPluginViewLoaderById(nextParams.pluginId);
-
-            if (!loader) {
-                setError(`Component not found: ${nextParams.viewId} (${moduleKey})`);
-                setComponent(null);
-                return;
-            }
-
             try {
-                const loaded = await loader();
-                if (!loaded.default) {
-                    setError(`Component default export missing: ${nextParams.viewId}`);
-                    setComponent(null);
-                    return;
+                if (!nextParams.viewUrl) {
+                    throw new Error(`Component not found: ${nextParams.viewId} (${nextParams.pluginId})`);
                 }
+
+                const loaded = await importByUrl(nextParams.viewUrl);
+                if (!loaded.default) {
+                    throw new Error(`Component default export missing: ${nextParams.viewId}`);
+                }
+
                 setError(null);
                 setComponent(() => loaded.default as ComponentType<Record<string, unknown>>);
             } catch (loadError) {

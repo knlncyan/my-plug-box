@@ -1,4 +1,4 @@
-﻿/**
+/**
  * 插件运行时协议：
  * 描述插件前端入口模块、命令处理器与命令执行上下文。
  */
@@ -8,14 +8,14 @@ export interface CommandExecutionContext {
   api: PluginHostAPI;
 }
 
-export type BuiltinCommandHandler = (
+export type PluginCommandHandler = (
   context: CommandExecutionContext,
   ...args: unknown[]
 ) => Promise<unknown> | unknown;
 
-export interface BuiltinPluginModule {
+export interface PluginModule {
   readonly pluginId: string;
-  commands?: Record<string, BuiltinCommandHandler>;
+  commands?: Record<string, PluginCommandHandler>;
   activate?: (api: PluginHostAPI) => Promise<void> | void;
   deactivate?: (api: PluginHostAPI) => Promise<void> | void;
 }

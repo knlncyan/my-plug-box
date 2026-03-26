@@ -1,56 +1,57 @@
-﻿import type { ComponentType } from 'react';
-import type { BuiltinPluginManifest } from '../../domain/protocol/plugin-catalog.protocol';
-import type { BuiltinPluginModule } from '../../domain/protocol/plugin-runtime.protocol';
+import type { PluginModule } from '../../domain/protocol/plugin-runtime.protocol';
 
-type PluginModuleLoader = () => Promise<{ default?: BuiltinPluginModule }>;
-type PluginViewLoader = () => Promise<{ default?: ComponentType<Record<string, unknown>> }>;
+const moduleUrlByPluginId = new Map<string, string>();
+const viewUrlByPluginId = new Map<string, string>();
 
-/**
- * 插件资源统一导入入口：
- * 1) 集中声明 import.meta.glob，避免资源导入分散。
- * 2) 统一维护 key 解析规则，避免目录迁移导致 key 不一致。
- */
-const manifestModules = import.meta.glob('../../plugins/*/plugin.json', {
-    eager: true,
-}) as Record<string, { default: BuiltinPluginManifest }>;
-
-const pluginModuleLoaders = import.meta.glob('../../plugins/*/index.ts') as Record<string, PluginModuleLoader>;
-
-const pluginViewLoaders = import.meta.glob('../../plugins/**/views/index.tsx') as Record<string, PluginViewLoader>;
-
-/**
- * 获取全部内置插件 manifest 列表。
- */
-export function getBuiltinPluginManifests(): BuiltinPluginManifest[] {
-    return Object.values(manifestModules).map((mod) => mod.default);
+function resolveAbsoluteUrl(rawUrl: string): string {
+    try {
+        return new URL(rawUrl, window.location.origin).toString();
+    } catch {
+        return rawUrl;
+    }
 }
 
 /**
- * 根据 pluginId 解析插件入口模块 key。
+ * 统一注册插件资源入口（仅外部插件）。
  */
-export function resolvePluginModuleKey(pluginId: string): string {
-    const folder = pluginId.replace(/^builtin\./, '');
-    return `../../plugins/${folder}/index.ts`;
+export function registerPluginResources(pluginId: string, moduleUrl: string, viewUrl?: string): void {
+    if (!moduleUrl || moduleUrl.trim().length === 0) {
+        throw new Error(`Plugin "${pluginId}" requires moduleUrl`);
+    }
+
+    moduleUrlByPluginId.set(pluginId, resolveAbsoluteUrl(moduleUrl));
+    if (viewUrl && viewUrl.trim().length > 0) {
+        viewUrlByPluginId.set(pluginId, resolveAbsoluteUrl(viewUrl));
+    }
 }
 
 /**
- * 根据 pluginId 获取插件入口模块 loader。
+ * 获取插件运行时入口 URL。
  */
-export function getPluginModuleLoaderById(pluginId: string): PluginModuleLoader | undefined {
-    return pluginModuleLoaders[resolvePluginModuleKey(pluginId)];
+export function getPluginModuleUrl(pluginId: string): string | undefined {
+    return moduleUrlByPluginId.get(pluginId);
 }
 
 /**
- * 根据 component_path 解析插件视图模块 key。
+ * 获取插件视图入口 URL。
  */
-export function resolvePluginViewModuleKey(pluginId: string): string {
-    const normalized = pluginId.replace(/\\/g, '/').replace(/^builtin\./, '');
-    return `../../plugins/${normalized}/views/index.tsx`;
+export function getPluginViewUrl(pluginId: string): string | undefined {
+    return viewUrlByPluginId.get(pluginId);
 }
 
 /**
- * 根据 pluginId 获取插件视图 loader。
+ * 直接按 URL 加载插件运行时模块。
  */
-export function getPluginViewLoaderById(pluginId: string): PluginViewLoader | undefined {
-    return pluginViewLoaders[resolvePluginViewModuleKey(pluginId)];
+export async function loadPluginModule(pluginId: string): Promise<PluginModule> {
+    const moduleUrl = getPluginModuleUrl(pluginId);
+    if (!moduleUrl) {
+        throw new Error(`Plugin module url not found: ${pluginId}`);
+    }
+
+    const loaded = await import(/* @vite-ignore */ moduleUrl);
+    if (!loaded?.default) {
+        throw new Error(`Plugin module default export missing: ${moduleUrl}`);
+    }
+
+    return loaded.default as PluginModule;
 }

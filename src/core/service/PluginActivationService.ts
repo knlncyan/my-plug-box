@@ -1,10 +1,9 @@
-﻿// PluginActivationService.ts
 import { listen, type Event } from '@tauri-apps/api/event';
 import service from '../../api/plugin.service';
 import type { RustPluginStatus } from '../../domain/plugin';
-import type { BuiltinPluginManifest, PluginSummary } from '../../domain/protocol/plugin-catalog.protocol';
+import type { PluginManifest, PluginSummary } from '../../domain/protocol/plugin-catalog.protocol';
 import { PluginDisposable } from '../PluginDisposable';
-import { getBuiltinPluginManifests } from '../utils/pluginResourceLoader';
+import { PluginAssetCatalogService } from './PluginAssetCatalogService';
 import {
     shouldActivateForCommand,
     shouldActivateForView,
@@ -13,28 +12,21 @@ import {
 
 /**
  * 插件激活状态服务：
- * 1) 管理 plugin.json 的激活规则索引。
- * 2) 管理当前已激活插件集合。
- * 3) 监听 Rust 端状态事件，保证前后端状态一致。
+ * 1) 管理 manifest 激活规则与 view/command 对应关系。
+ * 2) 监听后端事件，保持前后端状态一致。
+ * 3) 负责按需触发 rust 端激活。
  */
 export class PluginActivationService {
-    private readonly pluginsById = new Map<string, BuiltinPluginManifest>();
-    private readonly activatedPlugins = new Map<string, BuiltinPluginManifest>();
+    private readonly activatedPlugins = new Map<string, PluginManifest>();
     private statusChangeListener: (() => void) | null = null;
 
-    constructor(private readonly pluginDisposable: PluginDisposable) {
-        for (const manifest of getBuiltinPluginManifests()) {
-            const pluginId = manifest.id;
-            if (this.pluginsById.has(pluginId)) {
-                console.error(`Duplicated plugin id: ${pluginId}`);
-                continue;
-            }
-            this.pluginsById.set(pluginId, manifest);
-        }
-    }
+    constructor(
+        private readonly pluginAssetCatalogService: PluginAssetCatalogService,
+        private readonly pluginDisposable: PluginDisposable
+    ) {}
 
     /**
-     * 启动状态监听（仅需调用一次）。
+     * 启动状态监听。
      */
     async start(): Promise<void> {
         if (this.statusChangeListener) return;
@@ -42,7 +34,7 @@ export class PluginActivationService {
         const unlisten = await listen('plugin-status-changed', (event: Event<RustPluginStatus>) => {
             const { id, status } = event.payload;
             if (status === 'activated') {
-                const manifest = this.pluginsById.get(id);
+                const manifest = this.pluginAssetCatalogService.getManifestById(id);
                 if (manifest) {
                     this.activatedPlugins.set(id, manifest);
                 } else {
@@ -57,24 +49,19 @@ export class PluginActivationService {
         this.pluginDisposable.add('__global__', unlisten);
     }
 
-    /**
-     * 根据最新插件快照同步激活状态。
-     */
     syncFromPluginList(plugins: PluginSummary[]): void {
-        const next = new Set(
-            plugins
-                .filter((plugin) => /^activated$/i.test(plugin.status))
-                .map((plugin) => plugin.id)
+        const nextActivated = new Set(
+            plugins.filter((plugin) => /^activated$/i.test(plugin.status)).map((plugin) => plugin.id)
         );
 
         for (const id of Array.from(this.activatedPlugins.keys())) {
-            if (!next.has(id)) {
+            if (!nextActivated.has(id)) {
                 this.activatedPlugins.delete(id);
             }
         }
 
-        for (const id of next) {
-            const manifest = this.pluginsById.get(id);
+        for (const id of nextActivated) {
+            const manifest = this.pluginAssetCatalogService.getManifestById(id);
             if (manifest) {
                 this.activatedPlugins.set(id, manifest);
             }
@@ -86,49 +73,36 @@ export class PluginActivationService {
     }
 
     resolvePluginId(target: string): string | null {
-        if (this.pluginsById.has(target)) {
+        if (this.pluginAssetCatalogService.getManifestById(target)) {
             return target;
         }
-        return this.getPluginIdByViewId(target);
+        const viewManifest = this.pluginAssetCatalogService.getManifestByViewId(target);
+        return viewManifest?.id ?? null;
     }
 
     canActivateForCommand(pluginId: string, commandId: string): boolean {
-        const plugin = this.pluginsById.get(pluginId);
-        if (!plugin) return false;
-        return shouldActivateForCommand(plugin, commandId) || shouldActivateOnStartup(plugin);
+        const manifest = this.pluginAssetCatalogService.getManifestById(pluginId);
+        if (!manifest) return false;
+        return shouldActivateForCommand(manifest, commandId) || shouldActivateOnStartup(manifest);
     }
 
     canActivateForView(target: string): boolean {
         const pluginId = this.resolvePluginId(target);
         if (!pluginId) return false;
-
-        const plugin = this.pluginsById.get(pluginId);
-        if (!plugin) return false;
-        return shouldActivateForView(plugin) || shouldActivateOnStartup(plugin);
+        const manifest = this.pluginAssetCatalogService.getManifestById(pluginId);
+        if (!manifest) return false;
+        return shouldActivateForView(manifest) || shouldActivateOnStartup(manifest);
     }
 
-    /**
-     * 激活插件（后端状态激活，前端模块激活由 WorkerSandboxService 负责）。
-     */
     async activatePluginWithHooks(pluginId: string): Promise<void> {
         if (this.isPluginActivated(pluginId)) return;
 
-        const manifest = this.pluginsById.get(pluginId);
+        const manifest = this.pluginAssetCatalogService.getManifestById(pluginId);
         if (!manifest) {
             throw new Error(`Plugin not found: ${pluginId}`);
         }
 
         await service.activatePlugin(pluginId);
-        // 事件回调可能有延迟，先本地标记为激活状态。
         this.activatedPlugins.set(pluginId, manifest);
-    }
-
-    private getPluginIdByViewId(viewId: string): string | null {
-        for (const [pluginId, manifest] of this.pluginsById.entries()) {
-            if (manifest.view?.id === viewId) {
-                return pluginId;
-            }
-        }
-        return null;
     }
 }

@@ -3,6 +3,7 @@
 本文档面向本项目插件开发者，覆盖从创建插件到扩展宿主能力的基本流程。
 
 ## 1. 快速认知
+更多关于外部插件打包与 manifest 的细节请参考 docs/external-plugin-packaging.zh-CN.md。
 
 当前插件系统由三部分构成：
 

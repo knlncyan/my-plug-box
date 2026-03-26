@@ -1,4 +1,4 @@
-﻿import { SimpleContainer } from './ioc/SimpleContainer';
+import { SimpleContainer } from './ioc/SimpleContainer';
 import { PluginActivationService } from './service/PluginActivationService';
 import { PluginAssetCatalogService } from './service/PluginAssetCatalogService';
 import { PluginCommandService } from './service/PluginCommandService';
@@ -28,7 +28,7 @@ container.registerSingleton(PluginDisposable, () => new PluginDisposable());
 // 能力注册中心：统一管理插件可调用的宿主能力
 container.registerSingleton(CapabilityRegistry, () => new CapabilityRegistry());
 
-// 插件目录服务：加载内置 manifest 并注册到后端
+// 插件目录服务：加载外部插件清单并注册到后端
 container.registerSingleton(PluginAssetCatalogService, () => new PluginAssetCatalogService());
 
 // 视图状态服务：维护视图目录与当前激活视图
@@ -46,7 +46,11 @@ container.registerSingleton(PluginStorageService, () => new PluginStorageService
 // 激活服务：激活规则判断与状态同步
 container.registerSingleton(
     PluginActivationService,
-    () => new PluginActivationService(container.resolve(PluginDisposable))
+    () =>
+        new PluginActivationService(
+            container.resolve(PluginAssetCatalogService),
+            container.resolve(PluginDisposable)
+        )
 );
 
 // Worker 沙箱服务：每个插件独立 Worker 隔离执行
@@ -56,6 +60,7 @@ container.registerSingleton(
         new WorkerSandboxService({
             capabilityRegistry: container.resolve(CapabilityRegistry),
             pluginActivationService: container.resolve(PluginActivationService),
+            pluginAssetCatalogService: container.resolve(PluginAssetCatalogService),
             pluginEventBus: container.resolve(PluginEventBus),
             pluginDisposable: container.resolve(PluginDisposable),
             pluginStorageService: container.resolve(PluginStorageService),
@@ -82,7 +87,6 @@ container.registerSingleton(
             pluginAssetCatalogService: container.resolve(PluginAssetCatalogService),
             pluginActivationService: container.resolve(PluginActivationService),
             pluginCommandService: container.resolve(PluginCommandService),
-            // pluginViewService: container.resolve(PluginViewService),
             workerSandboxService: container.resolve(WorkerSandboxService),
             pluginDisposable: container.resolve(PluginDisposable),
         })

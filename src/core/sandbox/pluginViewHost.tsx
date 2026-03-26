@@ -1,6 +1,7 @@
 /**
  * 主界面中的插件视图沙箱宿主。
  */
+import * as React from 'react';
 import { Component, type ComponentType, type ErrorInfo, type ReactNode, useEffect, useState } from 'react';
 import ReactDOM from 'react-dom/client';
 import '../../index.css';
@@ -8,6 +9,7 @@ import '../../index.css';
 declare global {
     interface Window {
         __PLUGIN_VIEW_SANDBOX__?: boolean;
+        React?: typeof React;
     }
 }
 
@@ -125,6 +127,8 @@ function App() {
 function bootstrap(): void {
     // 标记当前窗口为插件视图沙箱环境，供 useCoreRuntime 切换桥接模式。
     window.__PLUGIN_VIEW_SANDBOX__ = true;
+    // 暴露 React 运行时，便于未打包的外部插件视图编写交互组件。
+    window.React = React;
 
     const root = document.getElementById('root');
     if (!root) {

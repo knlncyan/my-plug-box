@@ -1,4 +1,4 @@
-import type {
+﻿import type {
     HostEventMessage,
     HostMessagePayload,
     HostRequestAction,
@@ -12,14 +12,12 @@ import type { ExecuteCommandPipelineOptions } from '../../domain/runtime';
 import { CapabilityRegistry } from '../CapabilityRegistry';
 import { PluginDisposable } from '../PluginDisposable';
 import { PluginEventBus } from '../PluginEventBus';
-import { PluginActivationService } from './PluginActivationService';
 import { PluginAssetCatalogService } from './PluginAssetCatalogService';
 import { PluginSettingService } from './PluginSettingService';
 import { PluginStorageService } from './PluginStorageService';
 
 interface WorkerSandboxServiceDeps {
     capabilityRegistry: CapabilityRegistry;
-    pluginActivationService: PluginActivationService;
     pluginAssetCatalogService: PluginAssetCatalogService;
     pluginEventBus: PluginEventBus;
     pluginDisposable: PluginDisposable;
@@ -37,10 +35,7 @@ interface WorkerMethodContext {
     pluginId: string;
 }
 
-type WorkerMethodHandler = (
-    context: WorkerMethodContext,
-    params: unknown
-) => Promise<unknown>;
+type WorkerMethodHandler = (context: WorkerMethodContext, params: unknown) => Promise<unknown>;
 
 /**
  * Worker 沙箱服务：
@@ -56,7 +51,7 @@ export class WorkerSandboxService {
     private viewActivator: ((viewId: string) => void) | null = null;
 
     constructor(private readonly deps: WorkerSandboxServiceDeps) {
-        this.registerBuiltinWorkerMethods();
+        this.registerWorkerMethods();
 
         // 全局释放：应用退出或运行时重建时回收全部 Worker。
         deps.pluginDisposable.add('__global__', async () => {
@@ -79,16 +74,10 @@ export class WorkerSandboxService {
         );
     }
 
-    /**
-     * 注册“插件内发起命令调用”回调（由 runtime 注入）。
-     */
     setCommandExecutor(executor: CommandExecutor): void {
         this.commandExecutor = executor;
     }
 
-    /**
-     * 注册“激活视图”回调（由 runtime 注入）。
-     */
     setViewActivator(activate: (viewId: string) => void): void {
         this.viewActivator = activate;
     }
@@ -111,22 +100,12 @@ export class WorkerSandboxService {
         }
     }
 
-    /**
-     * 对外暴露的命令执行入口。
-     */
-    async executeCommand(
-        pluginId: string,
-        commandId: string,
-        args: unknown[],
-        trace: string[]
-    ): Promise<unknown> {
+    async executeCommand(pluginId: string, commandId: string, args: unknown[], trace: string[]): Promise<unknown> {
         const record = await this.getOrCreate(pluginId);
         return this.callWorker(record, 'execute-command', { pluginId, commandId, args, trace });
     }
 
-    // =================================== 以下是内部方法 ==================================
-
-    private registerBuiltinWorkerMethods(): void {
+    private registerWorkerMethods(): void {
         this.registerWorkerMethod('command.execute', async (context, params) => {
             const payload = this.asRecord(params);
             const commandId = payload.commandId;
@@ -189,7 +168,6 @@ export class WorkerSandboxService {
             if (typeof eventName !== 'string' || eventName.length === 0) {
                 throw new Error('Worker method event.emit missing event');
             }
-            // 广播到全部已激活 Worker，实现插件间事件联动。
             for (const targetPluginId of this.workers.keys()) {
                 this.postHostEvent(targetPluginId, eventName, payload.payload);
             }
@@ -214,10 +192,6 @@ export class WorkerSandboxService {
         });
     }
 
-    /**
-     * 注册 Worker -> Host 方法处理器。
-     * 返回值为注销函数，方便后续按需扩展能力。
-     */
     private registerWorkerMethod(method: string, handler: WorkerMethodHandler): () => void {
         if (this.workerMethodHandlers.has(method)) {
             throw new Error(`Duplicated worker method handler: ${method}`);
@@ -239,10 +213,6 @@ export class WorkerSandboxService {
         const existing = this.workers.get(pluginId);
         if (existing) return existing;
 
-        if (!this.deps.pluginActivationService.isPluginActivated(pluginId)) {
-            throw new Error(`Cannot create sandbox for inactive plugin: ${pluginId}`);
-        }
-
         const manifest = this.deps.pluginAssetCatalogService.getManifestById(pluginId);
         if (!manifest) {
             throw new Error(`Plugin manifest not found: ${pluginId}`);
@@ -252,7 +222,6 @@ export class WorkerSandboxService {
             throw new Error(`Plugin moduleUrl missing: ${pluginId}`);
         }
 
-        // Worker 入口文件在 src/core/sandbox/worker.ts。
         const worker = new Worker(new URL('../sandbox/worker.ts', import.meta.url), {
             type: 'module',
         });
@@ -283,11 +252,7 @@ export class WorkerSandboxService {
         return record;
     }
 
-    private callWorker(
-        record: PluginWorkerRecord,
-        action: HostRequestAction,
-        payload: HostMessagePayload
-    ): Promise<unknown> {
+    private callWorker(record: PluginWorkerRecord, action: HostRequestAction, payload: HostMessagePayload): Promise<unknown> {
         this.requestSerial += 1;
         const requestId = `${record.pluginId}:${this.requestSerial}`;
 
@@ -398,9 +363,7 @@ export class WorkerSandboxService {
         console.error(`[Sandbox] Worker error for ${pluginId}:`, error);
         this.failPendingRequests(
             pluginId,
-            new Error(
-                `[Sandbox] Worker startup/runtime failed for ${pluginId}: ${error.message || 'unknown'}`
-            )
+            new Error(`[Sandbox] Worker startup/runtime failed for ${pluginId}: ${error.message || 'unknown'}`)
         );
     }
 
@@ -426,9 +389,6 @@ export class WorkerSandboxService {
         this.workers.delete(pluginId);
     }
 
-    /**
-     * 统一释放全部插件 Worker（优先走 deactivate，确保插件有机会执行清理逻辑）。
-     */
     private async disposeAll(): Promise<void> {
         const pluginIds = Array.from(this.workers.keys());
         for (const pluginId of pluginIds) {

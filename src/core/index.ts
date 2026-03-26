@@ -1,11 +1,9 @@
-import { SimpleContainer } from './ioc/SimpleContainer';
-import { PluginActivationService } from './service/PluginActivationService';
+﻿import { SimpleContainer } from './ioc/SimpleContainer';
 import { PluginAssetCatalogService } from './service/PluginAssetCatalogService';
 import { PluginCommandService } from './service/PluginCommandService';
 import { PluginRuntimeService } from './service/PluginRuntimeService';
 import { PluginSettingService } from './service/PluginSettingService';
 import { PluginStorageService } from './service/PluginStorageService';
-// import { PluginViewService } from './service/PluginViewService';
 import { WorkerSandboxService } from './service/WorkerSandboxService';
 import type { CapabilityById, CapabilityFactory } from '../domain/capability';
 import { CapabilityRegistry } from './CapabilityRegistry';
@@ -19,47 +17,21 @@ import { PluginEventBus } from './PluginEventBus';
  */
 export const container = new SimpleContainer();
 
-// 事件总线：插件事件发布/订阅
 container.registerSingleton(PluginEventBus, () => new PluginEventBus());
-
-// 资源清理器：统一管理插件和全局可释放资源
 container.registerSingleton(PluginDisposable, () => new PluginDisposable());
-
-// 能力注册中心：统一管理插件可调用的宿主能力
 container.registerSingleton(CapabilityRegistry, () => new CapabilityRegistry());
-
-// 插件目录服务：加载外部插件清单并注册到后端
 container.registerSingleton(PluginAssetCatalogService, () => new PluginAssetCatalogService());
-
-// 视图状态服务：维护视图目录与当前激活视图
-// container.registerSingleton(PluginViewService, () => new PluginViewService());
-
-// 设置服务：插件设置读取与持久化
 container.registerSingleton(
     PluginSettingService,
     () => new PluginSettingService(container.resolve(PluginEventBus))
 );
-
-// 存储服务：插件私有数据读取与持久化
 container.registerSingleton(PluginStorageService, () => new PluginStorageService());
 
-// 激活服务：激活规则判断与状态同步
-container.registerSingleton(
-    PluginActivationService,
-    () =>
-        new PluginActivationService(
-            container.resolve(PluginAssetCatalogService),
-            container.resolve(PluginDisposable)
-        )
-);
-
-// Worker 沙箱服务：每个插件独立 Worker 隔离执行
 container.registerSingleton(
     WorkerSandboxService,
     () =>
         new WorkerSandboxService({
             capabilityRegistry: container.resolve(CapabilityRegistry),
-            pluginActivationService: container.resolve(PluginActivationService),
             pluginAssetCatalogService: container.resolve(PluginAssetCatalogService),
             pluginEventBus: container.resolve(PluginEventBus),
             pluginDisposable: container.resolve(PluginDisposable),
@@ -68,34 +40,27 @@ container.registerSingleton(
         })
 );
 
-// 命令服务：命令目录缓存、循环检测与调度
 container.registerSingleton(
     PluginCommandService,
     () =>
         new PluginCommandService({
-            pluginActivationService: container.resolve(PluginActivationService),
             workerSandboxService: container.resolve(WorkerSandboxService),
-            // pluginViewService: container.resolve(PluginViewService),
         })
 );
 
-// 运行时编排服务
 container.registerSingleton(
     PluginRuntimeService,
     () =>
         new PluginRuntimeService({
             pluginAssetCatalogService: container.resolve(PluginAssetCatalogService),
-            pluginActivationService: container.resolve(PluginActivationService),
             pluginCommandService: container.resolve(PluginCommandService),
             workerSandboxService: container.resolve(WorkerSandboxService),
             pluginDisposable: container.resolve(PluginDisposable),
         })
 );
 
-// 非 React 场景使用
 export const coreRuntime = container.resolve(PluginRuntimeService);
 
-// 能力注册入口（IoC 托管）
 export const capabilityRegistry = container.resolve(CapabilityRegistry);
 export function registerCapability<K extends string>(
     capabilityId: K,
@@ -104,7 +69,6 @@ export function registerCapability<K extends string>(
     return capabilityRegistry.register(capabilityId, factory);
 }
 
-// React Hook 入口
 export { useCoreRuntime } from './useCoreRuntime';
 
 export type { ExecuteCommandOptions } from '../domain/runtime';

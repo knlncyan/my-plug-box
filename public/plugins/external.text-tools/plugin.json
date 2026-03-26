@@ -1,0 +1,34 @@
+{
+  "id": "external.text-tools",
+  "name": "External Text Tools",
+  "version": "1.0.0",
+  "description": "Text processing plugin example: word count and slugify",
+  "activationEvents": [
+    "onCommand:external.text-tools.open",
+    "onCommand:external.text-tools.wordCount",
+    "onView:external.text-tools.main"
+  ],
+  "view": {
+    "id": "external.text-tools.main",
+    "title": "Text Tools",
+    "props": {
+      "welcome": "Text Tools"
+    }
+  },
+  "commands": [
+    {
+      "id": "external.text-tools.open",
+      "description": "Open text tools view"
+    },
+    {
+      "id": "external.text-tools.wordCount",
+      "description": "Count words in input"
+    },
+    {
+      "id": "external.text-tools.slugify",
+      "description": "Convert input to slug"
+    }
+  ],
+  "moduleUrl": "/plugins/external.text-tools/index.js",
+  "viewUrl": "/plugins/external.text-tools/view/index.js"
+}

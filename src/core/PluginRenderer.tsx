@@ -1,8 +1,5 @@
-/**
- * 插件视图渲染器（基于 iframe 沙箱）。
- * 1) 每个视图运行在独立 iframe，避免直接污染宿主 DOM。
- * 2) 视图通过 postMessage 请求主线程 runtime 能力。
- */
+﻿/**
+ * 鎻掍欢瑙嗗浘娓叉煋鍣紙鍩轰簬 iframe 娌欑锛夈€? * 1) 姣忎釜瑙嗗浘杩愯鍦ㄧ嫭绔?iframe锛岄伩鍏嶇洿鎺ユ薄鏌撳涓?DOM銆? * 2) 瑙嗗浘閫氳繃 postMessage 璇锋眰涓荤嚎绋?runtime 鑳藉姏銆? */
 import { Component, type ErrorInfo, type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { coreRuntime } from '.';
 import { getPluginViewUrl } from './utils/pluginResourceLoader';
@@ -206,6 +203,16 @@ function PluginSandboxFrame({ view }: Props) {
                         });
                         return;
                     }
+                    case 'refreshExternalPlugins': {
+                        await coreRuntime.refreshExternalPlugins();
+                        postResponse(targetWindow, {
+                            type: 'plugin-view-runtime-response',
+                            requestId: message.requestId,
+                            success: true,
+                            result: null,
+                        });
+                        return;
+                    }
                     default:
                         throw new Error(`runtime bridge unsupported action: ${message.action}`);
                 }
@@ -268,3 +275,4 @@ export function PluginViewLoader({ view }: Props) {
         </PluginViewErrorBoundary>
     );
 }
+

@@ -33,6 +33,27 @@ const DEFAULT_STATE = {
     plugOrderKey: 'activate' as const,
 };
 
+function toAsideBarKey(value: unknown): AsideBarKeys | undefined {
+    if (value === 'none' || value === 'plugs' || value === 'search' || value === 'tags') {
+        return value;
+    }
+    return undefined;
+}
+
+function toPlugViewMode(value: unknown): PlugViewModes | undefined {
+    if (value === 'list' || value === 'grid-small' || value === 'grid-medium') {
+        return value;
+    }
+    return undefined;
+}
+
+function toPlugOrderKey(value: unknown): PlugOrderKeys | undefined {
+    if (value === 'name' || value === 'activate') {
+        return value;
+    }
+    return undefined;
+}
+
 // 如果你不用 zustand/middleware/persist，可以自己实现 hydrate
 export const useAsideStateStore = create<AsideState>()((set, get) => ({
     ...DEFAULT_STATE,
@@ -51,9 +72,12 @@ export const useAsideStateStore = create<AsideState>()((set, get) => ({
                 set({
                     hiddenAside: saved?.['global.aside.hiddenAside'] == 'true',
                     hiddenBackend: saved?.['global.aside.hiddenBackend'] == 'true',
-                    asideBarKey: saved?.['global.aside.asideBarKey'] ?? DEFAULT_STATE.asideBarKey,
-                    plugViewMode: saved?.['global.aside.plugViewMode'] ?? DEFAULT_STATE.plugViewMode,
-                    plugOrderKey: saved?.['global.aside.plugOrderKey'] ?? DEFAULT_STATE.plugOrderKey,
+                    asideBarKey:
+                        toAsideBarKey(saved?.['global.aside.asideBarKey']) ?? DEFAULT_STATE.asideBarKey,
+                    plugViewMode:
+                        toPlugViewMode(saved?.['global.aside.plugViewMode']) ?? DEFAULT_STATE.plugViewMode,
+                    plugOrderKey:
+                        toPlugOrderKey(saved?.['global.aside.plugOrderKey']) ?? DEFAULT_STATE.plugOrderKey,
                 });
             }
         } catch (e) {

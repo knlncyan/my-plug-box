@@ -1,4 +1,4 @@
-use crate::core::PluginManager;
+use crate::core::{register_external_manifests, scan_external_plugin_manifests, PluginManager};
 use std::sync::{
     atomic::{AtomicBool, Ordering},
     Mutex,
@@ -23,7 +23,16 @@ pub fn run() {
         .setup(|app| {
             // 1.1 创建管理器
             let mut manager = PluginManager::new();
-            manager.set_app_handle(app.handle().clone());
+            match scan_external_plugin_manifests() {
+                Ok(manifests) => {
+                    if let Err(error) = register_external_manifests(&mut manager, &manifests) {
+                        eprintln!("[plugin-index] startup register failed: {}", error);
+                    }
+                }
+                Err(error) => {
+                    eprintln!("[plugin-index] startup scan failed: {}", error);
+                }
+            }
             // 1.2 交给 Tauri 管理
             app.manage(Mutex::new(manager));
             app.manage(state);
@@ -60,17 +69,16 @@ pub fn run() {
         })
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
-            commands::register_js_plugin,
-            commands::register_command_meta,
+            commands::refresh_external_plugins,
             commands::get_plugin_list,
             commands::get_registered_commands,
+            commands::activate_plugin,
+            commands::deactivate_plugin,
+            commands::disable_plugin,
             commands::get_all_plugin_settings,
             commands::set_plugin_setting,
             commands::get_plugin_storage_snapshot,
             commands::set_plugin_storage_value,
-            commands::activate_all_plugins,
-            commands::deactivate_plugin,
-            commands::activate_plugin,
             // 生命周期命令
             commands::init_settings,
         ])

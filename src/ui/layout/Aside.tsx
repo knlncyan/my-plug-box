@@ -36,14 +36,14 @@ export default () => {
     );
 
     const { activatedPlugins, handledPlugins } = useMemo(() => {
-        const activatedPlugins = plugins.filter(it => it.status == 'Activated');
+        const activatedPlugins = plugins.filter(it => it.status === 'activated');
         // 过滤
         const filteredPlugins = plugins.filter(it => {
             return (!hiddenBackend || it.view) && (it.name.includes(search) || it.description?.includes(search))
         });
         // 排序
         const handledPlugins = plugOrderKey == 'activate'
-            ? filteredPlugins.sort((a, _) => (a.status == 'Activated' ? -1 : 1))
+            ? filteredPlugins.sort((a, _) => (a.status === 'activated' ? -1 : 1))
             : filteredPlugins.sort((a, b) => a.name.localeCompare(b.name));
         return { activatedPlugins, handledPlugins };
     }, [plugins, hiddenBackend, plugOrderKey, search]);

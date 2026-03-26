@@ -40,6 +40,10 @@ const coreCapabilityCache = new Map<string, CapabilityContract>();
 const eventListeners = new Map<string, Set<(payload: unknown) => void>>();
 const settingWatchers = new Map<string, Set<(value: unknown) => void>>();
 let requestSerial = 0;
+const importByUrl = new Function(
+    'url',
+    'return import(url);'
+) as (url: string) => Promise<{ default?: unknown }>;
 
 async function ensurePluginModule(): Promise<PluginModule> {
     if (pluginModule) return pluginModule;
@@ -51,7 +55,8 @@ async function ensurePluginModule(): Promise<PluginModule> {
         throw new Error(`Worker not initialized: missing moduleUrl for ${pluginId}`);
     }
 
-    const loaded = await import(/* @vite-ignore */ moduleUrl);
+    // 通过 Function 包裹 dynamic import，避免 Vite 将 public 目录 URL 当源码模块处理。
+    const loaded = await importByUrl(moduleUrl);
     if (!loaded.default) {
         throw new Error(`Plugin module default export missing: ${moduleUrl}`);
     }

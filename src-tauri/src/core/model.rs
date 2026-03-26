@@ -29,7 +29,7 @@ pub struct PluginSummary {
     pub id: String,
     pub name: String,
     pub version: String,
-    pub status: String, // "Registered", "Activated", "Error"
+    pub status: String, // "registered" | "activating" | "activated" | ...
     pub icon: Option<String>,
     pub error: Option<String>,
     pub description: Option<String>,
@@ -70,6 +70,7 @@ pub enum PluginStatus {
     Activated,
     Deactivating,
     Inactive,
+    Disabled,
     Error(String),
 }
 

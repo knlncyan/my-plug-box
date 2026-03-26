@@ -1,0 +1,38 @@
+{
+  "id": "external.notes",
+  "name": "External Notes",
+  "version": "1.0.0",
+  "description": "Simple notes plugin example with storage commands",
+  "activationEvents": [
+    "onCommand:external.notes.open",
+    "onCommand:external.notes.add",
+    "onView:external.notes.main"
+  ],
+  "view": {
+    "id": "external.notes.main",
+    "title": "Notes",
+    "props": {
+      "tip": "Use commands to add/list/clear notes"
+    }
+  },
+  "commands": [
+    {
+      "id": "external.notes.open",
+      "description": "Open notes view"
+    },
+    {
+      "id": "external.notes.add",
+      "description": "Add note text"
+    },
+    {
+      "id": "external.notes.list",
+      "description": "List notes"
+    },
+    {
+      "id": "external.notes.clear",
+      "description": "Clear notes"
+    }
+  ],
+  "moduleUrl": "/plugins/external.notes/index.js",
+  "viewUrl": "/plugins/external.notes/view/index.js"
+}

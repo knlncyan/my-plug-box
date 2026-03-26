@@ -1,8 +1,5 @@
 use std::collections::HashMap;
 
-use serde::Serialize;
-use tauri::{AppHandle, Emitter};
-
 use crate::core::{
     ApiResponse, CommandMeta, PluginActivation, PluginContext, PluginEntry, PluginManifest,
     PluginStatus, PluginSummary,
@@ -14,19 +11,17 @@ pub trait PluginManagerActivation {
         manifest: PluginManifest,
         module: T,
     ) -> Result<ApiResponse<()>, String>;
-    // fn register_view(&mut self, view: ViewMeta) -> Result<ApiResponse<()>, String>;
     fn register_command(&mut self, cmd: CommandMeta) -> Result<ApiResponse<()>, String>;
-    fn activate_all(&mut self) -> Result<ApiResponse<()>, String>;
-    fn deactivate(&mut self, plugin_id: &String) -> Result<ApiResponse<()>, String>;
+    fn activate_by_id(&mut self, plugin_id: &str) -> Result<ApiResponse<()>, String>;
+    fn deactivate(&mut self, plugin_id: &str) -> Result<ApiResponse<()>, String>;
+    fn disable(&mut self, plugin_id: &str) -> Result<ApiResponse<()>, String>;
 }
 
 pub struct PluginManager {
     _plugins: HashMap<String, PluginEntry>,
     _contexts: HashMap<String, PluginContext>,
-    // Global uniqueness indexes: id -> owner_plugin_id
     _global_views: HashMap<String, String>,
     _global_commands: HashMap<String, String>,
-    app_handle: Option<AppHandle>,
 }
 
 impl PluginManager {
@@ -36,35 +31,43 @@ impl PluginManager {
             _contexts: HashMap::new(),
             _global_views: HashMap::new(),
             _global_commands: HashMap::new(),
-            app_handle: None,
         }
     }
 
-    fn emit_event(&self, event: &str, payload: impl Serialize + Clone) {
-        if let Some(handle) = &self.app_handle {
-            let _ = handle.emit(event, payload);
+    pub fn contains_plugin(&self, plugin_id: &str) -> bool {
+        self._plugins.contains_key(plugin_id)
+    }
+
+    fn status_label(status: &PluginStatus) -> &'static str {
+        match status {
+            PluginStatus::Registered => "registered",
+            PluginStatus::Activating => "activating",
+            PluginStatus::Activated => "activated",
+            PluginStatus::Deactivating => "deactivating",
+            PluginStatus::Inactive => "inactive",
+            PluginStatus::Disabled => "disabled",
+            PluginStatus::Error(_) => "error",
         }
     }
 
-    fn emit_plugin_status(&self, plugin_id: &str, status: PluginStatus) {
-        self.emit_event(
-            "plugin-status-changed",
-            serde_json::json!({
-                "id": plugin_id,
-                "status": status
-            }),
-        );
-    }
-
-    pub fn set_app_handle(&mut self, handle: AppHandle) {
-        self.app_handle = Some(handle);
+    fn status_error(status: &PluginStatus) -> Option<String> {
+        match status {
+            PluginStatus::Error(message) => Some(message.clone()),
+            _ => None,
+        }
     }
 
     fn activate_single(
         entry: &mut PluginEntry,
         contexts: &mut HashMap<String, PluginContext>,
-        emitter: &Option<AppHandle>,
     ) -> Result<ApiResponse<()>, String> {
+        if entry.status == PluginStatus::Disabled {
+            return Ok(ApiResponse::warning(format!(
+                "plugin {} is disabled",
+                entry.manifest.id
+            )));
+        }
+
         if entry.status == PluginStatus::Activated {
             return Ok(ApiResponse::warning(format!(
                 "plugin {} is already activated",
@@ -77,13 +80,6 @@ impl PluginManager {
 
         entry.status = PluginStatus::Activating;
 
-        if let Some(h) = emitter {
-            let _ = h.emit(
-                "plugin-status-changed",
-                serde_json::json!({"id": id, "status": PluginStatus::Activating}),
-            );
-        }
-
         let context = PluginContext {
             plugin_id: id.clone(),
         };
@@ -92,52 +88,26 @@ impl PluginManager {
             Ok(_) => {
                 entry.status = PluginStatus::Activated;
                 contexts.insert(id.clone(), context);
-
-                if let Some(h) = emitter {
-                    let _ = h.emit(
-                        "plugin-status-changed",
-                        serde_json::json!({"id": id, "status": PluginStatus::Activated}),
-                    );
-                }
                 Ok(ApiResponse::ok())
             }
             Err(e) => {
                 entry.status = PluginStatus::Error(e.clone());
-                if let Some(h) = emitter {
-                    let _ = h.emit(
-                        "plugin-status-changed",
-                        serde_json::json!({"id": id, "status": PluginStatus::Error(e.clone()), "error": e}),
-                    );
-                }
                 Err(e)
             }
         }
-    }
-
-    pub fn activate_by_id(&mut self, plugin_id: &str) -> Result<ApiResponse<()>, String> {
-        let entry = self
-            ._plugins
-            .get_mut(plugin_id)
-            .ok_or_else(|| format!("plugin {} not found", plugin_id))?;
-
-        Self::activate_single(entry, &mut self._contexts, &self.app_handle)
     }
 
     pub fn list_plugins(&self) -> Vec<PluginSummary> {
         self._plugins
             .iter()
             .map(|(id, entry)| {
-                let error_msg = match &entry.status {
-                    PluginStatus::Error(msg) => Some(msg.clone()),
-                    _ => None,
-                };
                 PluginSummary {
                     id: id.clone(),
                     name: entry.manifest.name.clone(),
                     version: entry.manifest.version.clone(),
-                    status: format!("{:?}", entry.status),
+                    status: Self::status_label(&entry.status).to_string(),
                     icon: entry.manifest.icon.clone(),
-                    error: error_msg,
+                    error: Self::status_error(&entry.status),
                     description: entry.manifest.description.clone(),
                     view: entry.manifest.view.clone(),
                 }
@@ -174,7 +144,6 @@ impl PluginManagerActivation for PluginManager {
         };
 
         self._plugins.insert(manifest.id.clone(), entry);
-        self.emit_plugin_status(&manifest.id, PluginStatus::Registered);
 
         Ok(ApiResponse::success(
             (),
@@ -224,76 +193,62 @@ impl PluginManagerActivation for PluginManager {
         Ok(ApiResponse::ok())
     }
 
-    fn activate_all(&mut self) -> Result<ApiResponse<()>, String> {
-        let mut errors = Vec::new();
-        let mut count = 0;
+    fn activate_by_id(&mut self, plugin_id: &str) -> Result<ApiResponse<()>, String> {
+        let entry = self
+            ._plugins
+            .get_mut(plugin_id)
+            .ok_or_else(|| format!("plugin {} not found", plugin_id))?;
 
-        for (id, entry) in self._plugins.iter_mut() {
-            if entry.status == PluginStatus::Registered {
-                match Self::activate_single(entry, &mut self._contexts, &self.app_handle) {
-                    Ok(_) => count += 1,
-                    Err(e) => {
-                        eprintln!("plugin {} activate failed: {}", id, e);
-                        errors.push(format!("{}: {}", id, e));
-                    }
-                }
-            }
+        Self::activate_single(entry, &mut self._contexts)
+    }
+
+    fn deactivate(&mut self, plugin_id: &str) -> Result<ApiResponse<()>, String> {
+        let entry = self
+            ._plugins
+            .get_mut(plugin_id)
+            .ok_or_else(|| format!("plugin {} not found", plugin_id))?;
+
+        if entry.status == PluginStatus::Disabled {
+            return Ok(ApiResponse::warning(format!(
+                "plugin {} is disabled",
+                plugin_id
+            )));
         }
 
-        if !errors.is_empty() {
-            return Err(format!(
-                "{} succeeded, {} failed:\n{}",
-                count,
-                errors.len(),
-                errors.join("\n")
-            ));
+        if entry.status != PluginStatus::Activated {
+            return Ok(ApiResponse::warning(format!(
+                "plugin {} is not activated",
+                plugin_id
+            )));
         }
+
+        let _ = entry.module.deactivate();
+        entry.status = PluginStatus::Inactive;
+
+        self._contexts.remove(plugin_id);
 
         Ok(ApiResponse::ok())
     }
 
-    fn deactivate(&mut self, plugin_id: &String) -> Result<ApiResponse<()>, String> {
-        let command_ids = {
-            let entry = self
-                ._plugins
-                .get_mut(plugin_id)
-                .ok_or_else(|| format!("plugin {} not found", plugin_id))?;
+    fn disable(&mut self, plugin_id: &str) -> Result<ApiResponse<()>, String> {
+        let entry = self
+            ._plugins
+            .get_mut(plugin_id)
+            .ok_or_else(|| format!("plugin {} not found", plugin_id))?;
 
-            if entry.status != PluginStatus::Activated {
-                return Ok(ApiResponse::warning(format!(
-                    "plugin {} is not activated",
-                    plugin_id
-                )));
-            }
-
-            let _ = entry.module.deactivate();
-
-            let command_ids = entry
-                .registered_commands
-                .iter()
-                .map(|c| c.id.clone())
-                .collect::<Vec<_>>();
-
-            // entry.registered_views.clear();
-            entry.registered_commands.clear();
-            entry.status = PluginStatus::Inactive;
-
-            command_ids
-        };
-
-        self._contexts.remove(plugin_id);
-
-        for command_id in command_ids {
-            if matches!(
-                self._global_commands.get(&command_id),
-                Some(owner) if owner == plugin_id
-            ) {
-                self._global_commands.remove(&command_id);
-            }
+        if entry.status == PluginStatus::Disabled {
+            return Ok(ApiResponse::warning(format!(
+                "plugin {} is already disabled",
+                plugin_id
+            )));
         }
 
-        self.emit_plugin_status(plugin_id, PluginStatus::Inactive);
-        self.emit_event("views-registered", serde_json::json!({}));
+        if entry.status == PluginStatus::Activated {
+            let _ = entry.module.deactivate();
+            self._contexts.remove(plugin_id);
+        }
+
+        entry.status = PluginStatus::Disabled;
 
         Ok(ApiResponse::ok())
     }

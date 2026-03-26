@@ -1,52 +1,64 @@
 /**
- * 插件目录/注册协议：
- * 对应插件清单、视图、命令以及后端 API 响应结构。
+ * 插件目录与后端接口协议（统一定义）：
+ * 1) 统一后端响应包络类型。
+ * 2) 统一插件列表/命令/插件清单结构。
  */
-export interface ApiResponse<T> {
-  success: boolean;
-  code: string;
-  message: string;
-  data?: T | null;
+export type ApiCode = 'SUCCESS' | 'WARNING' | 'ERROR';
+
+export interface ApiResponse<T = unknown> {
+    success: boolean;
+    code: ApiCode;
+    message: string;
+    data: T | null;
 }
+
+export type PluginStatus =
+    | 'registered'
+    | 'activating'
+    | 'activated'
+    | 'deactivating'
+    | 'inactive'
+    | 'disabled'
+    | 'error';
 
 export interface PluginViewManifest {
-  id: string;
-  title: string;
-  pluginId: string;
-  props: Record<string, unknown>;
-}
-
-export interface PluginManifestDto {
-  id: string;
-  name: string;
-  version: string;
-  icon?: string;
-  description?: string;
-  activationEvents?: string[];
-  view?: PluginViewManifest;
+    id: string;
+    title: string;
+    pluginId: string;
+    props: Record<string, unknown>;
 }
 
 export interface CommandMeta {
-  id: string;
-  description: string;
-  pluginId: string;
+    id: string;
+    description: string;
+    pluginId: string;
 }
 
 export interface PluginSummary {
-  id: string;
-  name: string;
-  version: string;
-  // "Registered", "Activated", "Error"
-  status: string;
-  icon?: string;
-  error?: string;
-  description?: string;
-  view?: PluginViewManifest
+    id: string;
+    name: string;
+    version: string;
+    status: PluginStatus;
+    icon?: string;
+    error?: string;
+    description?: string;
+    view?: PluginViewManifest;
 }
 
-export interface PluginManifest extends Omit<PluginManifestDto, "view"> {
-  view?: Omit<PluginViewManifest, "pluginId">
-  commands?: Omit<CommandMeta, "pluginId">[];
-  moduleUrl?: string;
-  viewUrl?: string;
+export interface PluginCommandManifest {
+    id: string;
+    description: string;
+}
+
+export interface PluginManifest {
+    id: string;
+    name: string;
+    version: string;
+    icon?: string;
+    description?: string;
+    activationEvents?: string[];
+    view?: PluginViewManifest;
+    commands?: PluginCommandManifest[];
+    moduleUrl?: string;
+    viewUrl?: string;
 }

@@ -1,0 +1,34 @@
+{
+  "id": "external.calculator",
+  "name": "External Calculator",
+  "version": "1.0.0",
+  "description": "Calculator example plugin with expression parser, history and interactive view",
+  "activationEvents": [
+    "onCommand:external.calculator.open",
+    "onCommand:external.calculator.eval",
+    "onView:external.calculator.main"
+  ],
+  "view": {
+    "id": "external.calculator.main",
+    "title": "Calculator",
+    "props": {
+      "welcome": "External Calculator"
+    }
+  },
+  "commands": [
+    {
+      "id": "external.calculator.open",
+      "description": "Open calculator view"
+    },
+    {
+      "id": "external.calculator.eval",
+      "description": "Evaluate an expression string"
+    },
+    {
+      "id": "external.calculator.clearHistory",
+      "description": "Clear calculator history"
+    }
+  ],
+  "moduleUrl": "/plugins/external.calculator/index.js",
+  "viewUrl": "/plugins/external.calculator/view/index.js"
+}

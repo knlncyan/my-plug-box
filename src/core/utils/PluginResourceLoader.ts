@@ -2,6 +2,10 @@ import type { PluginModule } from '../../domain/protocol/plugin-runtime.protocol
 
 const moduleUrlByPluginId = new Map<string, string>();
 const viewUrlByPluginId = new Map<string, string>();
+const importByUrl = new Function(
+    'url',
+    'return import(url);'
+) as (url: string) => Promise<{ default?: unknown }>;
 
 function resolveAbsoluteUrl(rawUrl: string): string {
     try {
@@ -48,10 +52,20 @@ export async function loadPluginModule(pluginId: string): Promise<PluginModule> 
         throw new Error(`Plugin module url not found: ${pluginId}`);
     }
 
-    const loaded = await import(/* @vite-ignore */ moduleUrl);
+    // 通过 Function 包裹 dynamic import，避免 Vite 将 public 目录 URL 当源码模块处理。
+    const loaded = await importByUrl(moduleUrl);
     if (!loaded?.default) {
         throw new Error(`Plugin module default export missing: ${moduleUrl}`);
     }
 
     return loaded.default as PluginModule;
 }
+
+/**
+ * 清空已注册的插件资源入口（用于刷新索引）。
+ */
+export function resetPluginResources(): void {
+    moduleUrlByPluginId.clear();
+    viewUrlByPluginId.clear();
+}
+

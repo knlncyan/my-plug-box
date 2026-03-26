@@ -44,6 +44,7 @@ function useHostRuntime() {
         ...snapshot,
         executeCommand: coreRuntime.executeCommand,
         setActiveView: coreRuntime.setActiveView,
+        refreshExternalPlugins: coreRuntime.refreshExternalPlugins,
     };
 }
 
@@ -135,10 +136,14 @@ function useSandboxRuntime() {
         [callParent]
     );
 
+    const refreshExternalPlugins = useCallback(async (): Promise<void> => {
+        await callParent('refreshExternalPlugins');
+    }, [callParent]);
     return {
         ...snapshot,
         executeCommand,
         setActiveView,
+        refreshExternalPlugins,
     };
 }
 
@@ -153,3 +158,4 @@ export function useCoreRuntime() {
     }
     return useHostRuntime();
 }
+

@@ -1,4 +1,4 @@
-const pluginId = 'external.text-tools';
+﻿const pluginId = 'external.text-tools';
 
 function toWords(input) {
   return String(input ?? '')

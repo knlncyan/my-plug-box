@@ -9,47 +9,30 @@ function ensureStyles() {
   document.head.appendChild(link);
 }
 
-function callRuntime(action, payload, timeoutMs = 10000) {
-  const requestId = `text-tools:${Date.now()}:${Math.random().toString(16).slice(2)}`;
-  const message = {
-    type: 'plugin-view-runtime-request',
-    requestId,
-    action,
-    payload,
-  };
+let pluginApiPromise = null;
 
-  return new Promise((resolve, reject) => {
-    const timer = window.setTimeout(() => {
-      cleanup();
-      reject(new Error(`runtime bridge timeout: ${action}`));
-    }, timeoutMs);
+async function createPluginApi() {
+  if (pluginApiPromise) {
+    return pluginApiPromise;
+  }
 
-    function cleanup() {
-      window.clearTimeout(timer);
-      window.removeEventListener('message', onMessage);
-    }
+  const factory = window.__PLUG_BOX_API_FACTORY__;
+  if (typeof factory === 'function') {
+    pluginApiPromise = factory();
+    return pluginApiPromise;
+  }
 
-    function onMessage(event) {
-      const data = event.data;
-      if (!data || data.type !== 'plugin-view-runtime-response' || data.requestId !== requestId) {
-        return;
-      }
+  if (window.__PLUG_BOX_API__) {
+    pluginApiPromise = Promise.resolve(window.__PLUG_BOX_API__);
+    return pluginApiPromise;
+  }
 
-      cleanup();
-      if (data.success === true) {
-        resolve(data.result);
-      } else {
-        reject(new Error(String(data.error || 'runtime bridge request failed')));
-      }
-    }
-
-    window.addEventListener('message', onMessage);
-    window.parent.postMessage(message, '*');
-  });
+  throw new Error('[plugin-view] plugin api factory not found');
 }
 
 async function executeCommand(commandId, args = []) {
-  return callRuntime('executeCommand', { commandId, args });
+  const api = await createPluginApi();
+  return api.get('commands').execute(commandId, ...args);
 }
 
 export default function TextToolsView(props) {
@@ -105,7 +88,7 @@ export default function TextToolsView(props) {
       className: 'text-tools-input',
       value: text,
       onChange: (event) => setText(event.target.value),
-      placeholder: '请输入一段文本...',
+      placeholder: 'Type some text...',
       rows: 6,
       disabled: busy,
     }),

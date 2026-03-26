@@ -1,4 +1,4 @@
-const pluginId = 'external.notes';
+﻿const pluginId = 'external.notes';
 
 async function readNotes(api) {
   const notes = await api.get('storage').get('notes');

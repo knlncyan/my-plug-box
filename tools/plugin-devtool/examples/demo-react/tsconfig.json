@@ -1,0 +1,22 @@
+﻿{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "strict": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "jsx": "react-jsx",
+    "baseUrl": ".",
+    "paths": {
+      "@plug-box/plugin-sdk": [
+        "./sdk/index.ts"
+      ]
+    }
+  },
+  "include": [
+    "src",
+    "sdk"
+  ]
+}

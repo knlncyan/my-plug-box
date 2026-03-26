@@ -9,47 +9,30 @@ function ensureStyles() {
   document.head.appendChild(link);
 }
 
-function callRuntime(action, payload, timeoutMs = 10000) {
-  const requestId = `notes:${Date.now()}:${Math.random().toString(16).slice(2)}`;
-  const message = {
-    type: 'plugin-view-runtime-request',
-    requestId,
-    action,
-    payload,
-  };
+let pluginApiPromise = null;
 
-  return new Promise((resolve, reject) => {
-    const timer = window.setTimeout(() => {
-      cleanup();
-      reject(new Error(`runtime bridge timeout: ${action}`));
-    }, timeoutMs);
+async function createPluginApi() {
+  if (pluginApiPromise) {
+    return pluginApiPromise;
+  }
 
-    function cleanup() {
-      window.clearTimeout(timer);
-      window.removeEventListener('message', onMessage);
-    }
+  const factory = window.__PLUG_BOX_API_FACTORY__;
+  if (typeof factory === 'function') {
+    pluginApiPromise = factory();
+    return pluginApiPromise;
+  }
 
-    function onMessage(event) {
-      const data = event.data;
-      if (!data || data.type !== 'plugin-view-runtime-response' || data.requestId !== requestId) {
-        return;
-      }
+  if (window.__PLUG_BOX_API__) {
+    pluginApiPromise = Promise.resolve(window.__PLUG_BOX_API__);
+    return pluginApiPromise;
+  }
 
-      cleanup();
-      if (data.success === true) {
-        resolve(data.result);
-      } else {
-        reject(new Error(String(data.error || 'runtime bridge request failed')));
-      }
-    }
-
-    window.addEventListener('message', onMessage);
-    window.parent.postMessage(message, '*');
-  });
+  throw new Error('[plugin-view] plugin api factory not found');
 }
 
 async function executeCommand(commandId, args = []) {
-  return callRuntime('executeCommand', { commandId, args });
+  const api = await createPluginApi();
+  return api.get('commands').execute(commandId, ...args);
 }
 
 function normalizeNotes(value) {
@@ -120,7 +103,7 @@ export default function NotesView(props) {
     event.preventDefault();
     const text = String(input || '').trim();
     if (!text) {
-      setError('请输入 note 内容');
+      setError('Please enter note content');
       return;
     }
 
@@ -162,7 +145,7 @@ export default function NotesView(props) {
         className: 'notes-input',
         value: input,
         onChange: (event) => setInput(event.target.value),
-        placeholder: '输入你的 note...',
+        placeholder: 'Type your note...',
         disabled: busy,
       }),
       h(
@@ -172,7 +155,7 @@ export default function NotesView(props) {
           type: 'submit',
           disabled: busy,
         },
-        busy ? '保存中...' : '添加'
+        busy ? 'Saving...' : 'Add'
       ),
       h(
         'button',
@@ -182,14 +165,14 @@ export default function NotesView(props) {
           onClick: () => void onClear(),
           disabled: busy,
         },
-        '清空'
+        'Clear'
       )
     ),
     error ? h('div', { className: 'notes-error' }, error) : null,
     loading
-      ? h('div', { className: 'notes-empty' }, '加载中...')
+      ? h('div', { className: 'notes-empty' }, 'Loading...')
       : notes.length === 0
-      ? h('div', { className: 'notes-empty' }, '暂无 note')
+      ? h('div', { className: 'notes-empty' }, 'No notes yet')
       : h(
           'ul',
           { className: 'notes-list' },

@@ -1,0 +1,1 @@
+const n="external.my-plugin",t={pluginId:n,activate:async()=>{console.info("[external.my-plugin] activated")},commands:{"external.my-plugin.open":e=>(e.api.get("views").activate("external.my-plugin.main"),n),"external.my-plugin.ping":()=>"pong"}};export{t as default};

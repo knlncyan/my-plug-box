@@ -1,6 +1,7 @@
 ﻿{
   "id": "external.hello",
   "name": "External Hello",
+  "icon": "/plugins/external.hello/icon.svg",
   "version": "1.0.0",
   "description": "External plugin example loaded from public/plugins",
   "activationEvents": [

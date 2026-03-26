@@ -1,6 +1,7 @@
-{
+﻿{
   "id": "external.calculator",
   "name": "External Calculator",
+  "icon": "/public/plugins/external.calculator/icon.svg",
   "version": "1.0.0",
   "description": "Calculator example plugin with expression parser, history and interactive view",
   "activationEvents": [

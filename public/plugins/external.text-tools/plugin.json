@@ -1,6 +1,7 @@
-{
+﻿{
   "id": "external.text-tools",
   "name": "External Text Tools",
+  "icon": "/plugins/external.text-tools/icon.svg",
   "version": "1.0.0",
   "description": "Text processing plugin example: word count and slugify",
   "activationEvents": [

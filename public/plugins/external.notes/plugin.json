@@ -1,6 +1,7 @@
-{
+﻿{
   "id": "external.notes",
   "name": "External Notes",
+  "icon": "/plugins/external.notes/icon.svg",
   "version": "1.0.0",
   "description": "Simple notes plugin example with storage commands",
   "activationEvents": [

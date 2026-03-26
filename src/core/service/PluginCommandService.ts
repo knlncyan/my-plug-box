@@ -113,9 +113,14 @@ export class PluginCommandService {
             nextTrace
         );
 
-        // 命令返回 pluginId 时，自动切换目标插件视图。
+        // 仅当返回值是已知插件 ID 或已知视图 ID 时，才执行视图切换。
         if (typeof result === 'string' && options.activateView) {
-            options.activateView(result);
+            const target = result.trim();
+            const isKnownPluginId = this.plugins.has(target);
+            const isKnownViewId = Array.from(this.plugins.values()).some((plugin) => plugin.view?.id === target);
+            if (target.length > 0 && (isKnownPluginId || isKnownViewId)) {
+                options.activateView(target);
+            }
         }
 
         return result;

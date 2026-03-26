@@ -1,4 +1,4 @@
-const STYLE_ID = 'external-calculator-view-style';
+﻿const STYLE_ID = 'external-calculator-view-style';
 
 function ensureStyles() {
   if (document.getElementById(STYLE_ID)) return;
@@ -12,9 +12,10 @@ function ensureStyles() {
 function safeEval(expression) {
   const source = String(expression ?? '').trim();
   if (!source) return '';
+
   const sanitized = source.replace(/[^0-9+\-*/().%\s]/g, '');
   if (!sanitized) return '';
-  // 仅示例：这里使用 Function 计算，生产建议替换为完整表达式解析器。
+
   return String(Function(`"use strict"; return (${sanitized});`)());
 }
 
@@ -28,6 +29,7 @@ const BUTTON_ROWS = [
 
 export default function CalculatorView(props) {
   ensureStyles();
+
   const React = window.React;
   if (!React) {
     return 'React runtime missing in plugin sandbox';
@@ -36,7 +38,7 @@ export default function CalculatorView(props) {
   const h = React.createElement;
   const useState = React.useState;
 
-  const _welcome = typeof props?.welcome === 'string' ? props.welcome : 'Calculator';
+  const welcome = typeof props?.welcome === 'string' ? props.welcome : 'Calculator';
   const [expr, setExpr] = useState('');
   const [result, setResult] = useState('');
   const [error, setError] = useState('');
@@ -89,7 +91,7 @@ export default function CalculatorView(props) {
   return h(
     'div',
     { className: 'calc-root' },
-    h('h2', { className: 'calc-title' }, _welcome),
+    h('h2', { className: 'calc-title' }, welcome),
     h('div', { className: 'calc-screen' }, expr || '0'),
     h('div', { className: 'calc-result' }, result ? `= ${result}` : 'Press = to evaluate'),
     error ? h('div', { className: 'calc-error' }, error) : null,
@@ -97,7 +99,7 @@ export default function CalculatorView(props) {
     h(
       'div',
       { className: 'calc-actions' },
-      h('button', { className: 'calc-btn calc-wide', onClick: onBackspace, type: 'button' }, '⌫'),
+      h('button', { className: 'calc-btn calc-wide', onClick: onBackspace, type: 'button' }, 'Back'),
       h('button', { className: 'calc-btn calc-wide', onClick: onClear, type: 'button' }, 'Clear'),
       h('button', { className: 'calc-btn calc-eval', onClick: onEval, type: 'button' }, '=')
     ),

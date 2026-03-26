@@ -1,0 +1,29 @@
+﻿{
+  "id": "external.hello",
+  "name": "External Hello",
+  "version": "1.0.0",
+  "description": "External plugin example loaded from public/plugins",
+  "activationEvents": [
+    "onCommand:external.hello.open",
+    "onView:external.hello.main"
+  ],
+  "view": {
+    "id": "external.hello.main",
+    "title": "External Hello",
+    "props": {
+      "welcome": "from external plugin"
+    }
+  },
+  "commands": [
+    {
+      "id": "external.hello.open",
+      "description": "Open external hello view"
+    },
+    {
+      "id": "external.hello.ping",
+      "description": "Print ping log"
+    }
+  ],
+  "moduleUrl": "/plugins/external.hello/index.js",
+  "viewUrl": "/plugins/external.hello/view/index.js"
+}

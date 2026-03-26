@@ -4,7 +4,6 @@
 /// 2) storage：按插件分文件存储，文件名由插件 ID 安全转换得到。
 use serde_json::{Map, Value};
 use std::fs;
-use std::hash::Hash;
 use std::path::{Path, PathBuf};
 
 use crate::core::SettingsDTO;

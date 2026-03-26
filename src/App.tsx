@@ -2,6 +2,7 @@ import '@/lib/lifecycle/index'
 import { Toaster } from './components/ui/sonner';
 import WorkbenchLayout from './ui';
 import lifecycleTrigger from './lib/lifecycleTrigger';
+import { TooltipProvider } from './components/ui/tooltip';
 
 
 export default function App() {
@@ -9,8 +10,10 @@ export default function App() {
 
   return (
     <>
-      <WorkbenchLayout />
-      <Toaster />
+      <TooltipProvider>
+        <WorkbenchLayout />
+        <Toaster />
+      </TooltipProvider>
     </>
   )
 };

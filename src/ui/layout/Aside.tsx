@@ -8,6 +8,7 @@ import { useAppViewStore } from "@/store/appViewStore";
 import { AsideBarKeys, useAsideStateStore } from "@/store/asideStateStore";
 import { useCommandPaletteDialog } from "../pages/commandPalette";
 import PluginManager from "../pages/pluginManager";
+import { MyTooltip } from "@/components/MyTooltip";
 
 export default () => {
     const { plugins, activeViewPluginId, setActiveView } = useCoreRuntime();
@@ -194,8 +195,12 @@ export default () => {
                             }
                         </div>
                         <div className="flex p-1 items-center gap-1.5  text-xs text-neutral-500 border-t border-neutral-150">
-                            <Boxes className="w-4 h-4" /><span>{plugins.length}</span>
-                            <Activity className="w-4 h-4" /><span>{activatedPlugins.length}</span>
+                            <MyTooltip text="插件数量">
+                                <div className="flex items-center gap-1.5"><Boxes className="w-4 h-4" /><span>{plugins.length}</span></div>
+                            </MyTooltip>
+                            <MyTooltip text="已激活插件数量">
+                                <div className="flex items-center gap-1.5"><Activity className="w-4 h-4" /><span>{activatedPlugins.length}</span></div>
+                            </MyTooltip>
                             <SettingCenter />
                         </div>
                     </>
@@ -316,7 +321,7 @@ const MoreOptions = () => {
 const SettingCenter = () => {
     const hiddenAside = useAsideStateStore(it => it.hiddenAside);
     const setMainViewContent = useAppViewStore(state => state.setMainViewContent);
-    
+
     return (
         <DropdownMenu>
             <DropdownMenuTrigger asChild>

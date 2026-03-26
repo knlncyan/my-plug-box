@@ -1,4 +1,4 @@
-use tauri::{command};
+use tauri::{AppHandle, Manager, command};
 
 use crate::core::{write_settings, ApiResponse, SettingsDTO};
 

@@ -1,11 +1,9 @@
-import { CSSProperties } from "react";
-import { X, Minus, Copy, ChevronDown, Tally1, Settings } from "lucide-react";
+import { CSSProperties, useEffect } from "react";
+import { X, Minus, Copy, ChevronDown } from "lucide-react";
 import { getCurrentWindow } from "@tauri-apps/api/window"
-import { coreRuntime, useCoreRuntime } from "@/core";
-import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
+import { coreRuntime } from "@/core";
 import lifecycleTrigger from "@/lib/lifecycleTrigger";
-import { useAppViewStore } from "@/store/appViewStore";
-import { groupBy, keyBy } from "lodash";
+import { listen } from "@tauri-apps/api/event";
 
 export default () => {
     const appWindow = getCurrentWindow();
@@ -21,13 +19,34 @@ export default () => {
     const closeApp = async () => {
         await coreRuntime.shutdown();
         await lifecycleTrigger.shutdownClose();
-        alert("清理完成");
+        // alert("清理完成");
         appWindow.close();
     }
 
     const minimizeToTray = async () => {
         await appWindow.hide();
     };
+
+    useEffect(() => {
+        let unlisten: (() => void) | undefined;
+
+        const setupListener = async () => {
+            unlisten = await listen<string>('window-close-requested', async (event) => {
+                console.log('拦截到关闭事件:', event.payload);
+                try {
+                    await closeApp();
+                } catch (err) {
+                    appWindow.close();
+                }
+            });
+        };
+
+        setupListener();
+
+        return () => {
+            if (unlisten) unlisten();
+        };
+    }, []);
 
     return (
         <div
@@ -43,9 +62,6 @@ export default () => {
                 className="ml-auto flex items-center"
                 style={{ WebkitAppRegion: 'no-drag' } as CSSProperties}
             >
-                {/* 设置 */}
-                {/* <SettingsDialog />
-                <Tally1 className="w-6 text-neutral-400 mr-[-16px]" /> */}
                 {/* 最小化到托盘 */}
                 <button
                     onClick={minimizeToTray}
@@ -78,19 +94,5 @@ export default () => {
                 </button>
             </div>
         </div>
-    )
-}
-
-const CommandPalette = () => {
-    const { commands, plugins } = useCoreRuntime();
-    const commandsGroup = groupBy(commands.sort((a, b) => (a.description.localeCompare(b.description))), 'pluginId');
-
-    return (
-        <button
-           
-            className="flex h-8 w-8 items-center justify-center rounded hover:bg-black/10"
-        >
-            <Settings className="h-3.5 w-3.5 " />
-        </button>
     )
 }

@@ -1,13 +1,24 @@
 use crate::core::PluginManager;
-use std::sync::Mutex;
-use tauri::Manager;
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Mutex,
+};
+use tauri::{Emitter, Manager, WindowEvent};
 
-mod utils;
 mod commands;
 mod core;
+mod utils;
+
+pub struct CloseState {
+    pub is_closing: AtomicBool,
+}
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    let state = CloseState {
+        is_closing: AtomicBool::new(false),
+    };
+
     tauri::Builder::default()
         .setup(|app| {
             // 1.1 创建管理器
@@ -15,11 +26,37 @@ pub fn run() {
             manager.set_app_handle(app.handle().clone());
             // 1.2 交给 Tauri 管理
             app.manage(Mutex::new(manager));
-
+            app.manage(state);
             // 2. 创建系统托盘
             utils::tray::create_tray(app.handle())?;
 
             Ok(())
+        })
+        .on_window_event(|window, event| {
+            if let WindowEvent::CloseRequested { api, .. } = event {
+                let app = window.app_handle().clone();
+                let state = app.state::<CloseState>();
+
+                if state.is_closing.load(Ordering::SeqCst) {
+                    state.is_closing.store(false, Ordering::SeqCst);
+                    return;
+                }
+
+                state.is_closing.store(true, Ordering::SeqCst);
+
+                api.prevent_close();
+
+                let app_clone = app.clone();
+                let label = window.label().to_string();
+                tauri::async_runtime::spawn(async move {
+                    let _ = app_clone.emit("window-close-requested", label);
+                });
+            }
+            if let WindowEvent::Destroyed = event {
+                if let Some(s) = window.app_handle().try_state::<CloseState>() {
+                    s.is_closing.store(false, Ordering::SeqCst);
+                }
+            }
         })
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
@@ -34,7 +71,7 @@ pub fn run() {
             commands::activate_all_plugins,
             commands::deactivate_plugin,
             commands::activate_plugin,
-            // 初始化命令
+            // 生命周期命令
             commands::init_settings,
         ])
         .run(tauri::generate_context!())

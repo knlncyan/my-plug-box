@@ -231,7 +231,7 @@ function PluginSandboxFrame({ view }: Props) {
                 ref={iframeRef}
                 src={sandboxUrl}
                 title={`plugin-view-${view.id}`}
-                sandbox="allow-scripts"
+                sandbox="allow-scripts allow-forms"
                 className="h-full w-full border-0"
                 onLoad={() => setFrameError(null)}
                 onError={() => setFrameError('Failed to load plugin sandbox iframe')}

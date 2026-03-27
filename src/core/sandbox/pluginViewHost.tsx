@@ -1,22 +1,28 @@
-/**
- * 主界面中的插件视图沙箱宿主。
- */
 import * as React from 'react';
 import { Component, type ComponentType, type ErrorInfo, type ReactNode, useEffect, useState } from 'react';
 import ReactDOM from 'react-dom/client';
 import '../../index.css';
+import type {
+    EventsCapability,
+    PluginDisposable,
+    PluginHostAPI,
+    SettingsCapability,
+} from '../../domain/api';
+import type { CapabilityById, CapabilityContract } from '../../domain/capability';
+import { createWindowRpcClient } from '../utils/communicationUtils';
 
 declare global {
     interface Window {
         __PLUGIN_VIEW_SANDBOX__?: boolean;
         React?: typeof React;
+        __PLUG_BOX_API__?: PluginHostAPI;
+        __PLUG_BOX_API_FACTORY__?: () => Promise<PluginHostAPI>;
     }
 }
 
 interface SandboxParams {
     viewId: string;
     pluginId: string;
-    // 主线程通过 query 下发可直接加载的视图入口 URL。
     viewUrl: string | null;
     props: Record<string, unknown>;
 }
@@ -74,8 +80,241 @@ function parseParams(): SandboxParams {
     return { viewId, pluginId, viewUrl, props };
 }
 
-// 用 Function 包装动态 import，避免 dev 服务器把 public 资源当源码模块预处理。
+function asRecord(value: unknown): Record<string, unknown> {
+    if (!value || typeof value !== 'object') return {};
+    return value as Record<string, unknown>;
+}
+
 const importByUrl = new Function('url', 'return import(url);') as (url: string) => Promise<{ default?: unknown }>;
+
+function createSandboxPluginApi(params: SandboxParams): PluginHostAPI {
+    const rpcClient = createWindowRpcClient({
+        channel: 'plugin-view-runtime',
+        requestIdPrefix: 'view-sdk',
+        requestTimeoutMs: 10_000,
+        targetWindow: () => window.parent,
+        sourceWindow: () => window.parent,
+    });
+
+    const capabilityCache = new Map<string, CapabilityContract>();
+
+    const settingWatchers = new Map<string, Set<(value: unknown) => void>>();
+    const settingSubscriptionByKey = new Map<string, string>();
+
+    const eventWatchers = new Map<string, Set<(payload: unknown) => void>>();
+    const eventSubscriptionByName = new Map<string, string>();
+
+    const disposeSubscriptionListener = rpcClient.on('capability.subscription', (payload) => {
+        const data = asRecord(payload);
+        const subscriptionId = data.subscriptionId;
+        if (typeof subscriptionId !== 'string') return;
+
+        for (const [key, id] of settingSubscriptionByKey.entries()) {
+            if (id !== subscriptionId) continue;
+            const watchers = settingWatchers.get(key);
+            if (!watchers) return;
+            for (const watcher of watchers) {
+                try {
+                    watcher(data.data);
+                } catch (error) {
+                    console.error('[plugin-view-sandbox] settings.onChange handler failed', error);
+                }
+            }
+            return;
+        }
+
+        for (const [eventName, id] of eventSubscriptionByName.entries()) {
+            if (id !== subscriptionId) continue;
+            const watchers = eventWatchers.get(eventName);
+            if (!watchers) return;
+            for (const watcher of watchers) {
+                try {
+                    watcher(data.data);
+                } catch (error) {
+                    console.error('[plugin-view-sandbox] events.on handler failed', error);
+                }
+            }
+            return;
+        }
+    });
+
+    async function call<T = unknown>(method: string, paramsPayload?: unknown): Promise<T> {
+        if (method === 'runtime.refreshExternalPlugins') {
+            await rpcClient.call('refreshExternalPlugins');
+            return null as T;
+        }
+
+        return rpcClient.call<T>('invokeHostMethod', {
+            method,
+            params: paramsPayload,
+        });
+    }
+
+    async function ensureSettingSubscription(key: string): Promise<void> {
+        if (settingSubscriptionByKey.has(key)) return;
+        const subscriptionId = await call<string>('settings.subscribe', key);
+        settingSubscriptionByKey.set(key, subscriptionId);
+    }
+
+    async function releaseSettingSubscriptionIfUnused(key: string): Promise<void> {
+        const watchers = settingWatchers.get(key);
+        if (watchers && watchers.size > 0) return;
+
+        const subscriptionId = settingSubscriptionByKey.get(key);
+        if (!subscriptionId) return;
+
+        settingSubscriptionByKey.delete(key);
+        await call('settings.unsubscribe', subscriptionId);
+    }
+
+    async function ensureEventSubscription(eventName: string): Promise<void> {
+        if (eventSubscriptionByName.has(eventName)) return;
+        const subscriptionId = await call<string>('events.subscribe', eventName);
+        eventSubscriptionByName.set(eventName, subscriptionId);
+    }
+
+    async function releaseEventSubscriptionIfUnused(eventName: string): Promise<void> {
+        const watchers = eventWatchers.get(eventName);
+        if (watchers && watchers.size > 0) return;
+
+        const subscriptionId = eventSubscriptionByName.get(eventName);
+        if (!subscriptionId) return;
+
+        eventSubscriptionByName.delete(eventName);
+        await call('events.unsubscribe', subscriptionId);
+    }
+
+    function createDynamicCapabilityProxy(capabilityId: string): CapabilityContract {
+        const existing = capabilityCache.get(capabilityId);
+        if (existing) {
+            return existing;
+        }
+
+        const proxy = new Proxy(
+            {},
+            {
+                get: (_target, methodName) => {
+                    if (typeof methodName !== 'string') return undefined;
+                    return (...args: unknown[]) =>
+                        call(
+                            `${capabilityId}.${methodName}`,
+                            args.length <= 1 ? args[0] : args
+                        );
+                },
+            }
+        ) as CapabilityContract;
+
+        capabilityCache.set(capabilityId, proxy);
+        return proxy;
+    }
+
+    const localCapabilityFactories: Record<string, () => CapabilityContract> = {
+        settings: () => {
+            const settings: SettingsCapability = {
+                get: async function <T>(key: string): Promise<T | undefined> {
+                    return call<T | undefined>('settings.get', key);
+                },
+                set: async (key: string, value: unknown): Promise<void> => {
+                    await call('settings.set', { key, value });
+                },
+                onChange: function <T>(key: string, handler: (value: T | undefined) => void): PluginDisposable {
+                    let watchers = settingWatchers.get(key);
+                    if (!watchers) {
+                        watchers = new Set();
+                        settingWatchers.set(key, watchers);
+                    }
+                    const wrapped = (value: unknown) => handler(value as T | undefined);
+                    watchers.add(wrapped);
+                    void ensureSettingSubscription(key);
+
+                    return {
+                        dispose: () => {
+                            watchers?.delete(wrapped);
+                            if (watchers && watchers.size === 0) {
+                                settingWatchers.delete(key);
+                            }
+                            void releaseSettingSubscriptionIfUnused(key);
+                        },
+                    };
+                },
+            };
+            return settings as unknown as CapabilityContract;
+        },
+        events: () => {
+            const events: EventsCapability = {
+                emit: (eventName: string, payload?: unknown): void => {
+                    void call('events.emit', { event: eventName, payload });
+                },
+                on: (eventName: string, handler: (payload: unknown) => void): PluginDisposable => {
+                    let watchers = eventWatchers.get(eventName);
+                    if (!watchers) {
+                        watchers = new Set();
+                        eventWatchers.set(eventName, watchers);
+                    }
+                    watchers.add(handler);
+                    void ensureEventSubscription(eventName);
+
+                    return {
+                        dispose: () => {
+                            watchers?.delete(handler);
+                            if (watchers && watchers.size === 0) {
+                                eventWatchers.delete(eventName);
+                            }
+                            void releaseEventSubscriptionIfUnused(eventName);
+                        },
+                    };
+                },
+            };
+            return events as unknown as CapabilityContract;
+        },
+    };
+
+    window.addEventListener(
+        'beforeunload',
+        () => {
+            disposeSubscriptionListener();
+
+            for (const subscriptionId of settingSubscriptionByKey.values()) {
+                void call('settings.unsubscribe', subscriptionId);
+            }
+            for (const subscriptionId of eventSubscriptionByName.values()) {
+                void call('events.unsubscribe', subscriptionId);
+            }
+
+            rpcClient.dispose();
+            capabilityCache.clear();
+            settingWatchers.clear();
+            settingSubscriptionByKey.clear();
+            eventWatchers.clear();
+            eventSubscriptionByName.clear();
+        },
+        { once: true }
+    );
+
+    function getCapability<K extends string>(capabilityId: K): CapabilityById<K> {
+        const cached = capabilityCache.get(capabilityId);
+        if (cached) {
+            return cached as CapabilityById<K>;
+        }
+
+        const createLocal = localCapabilityFactories[capabilityId];
+        if (createLocal) {
+            const localCapability = createLocal();
+            capabilityCache.set(capabilityId, localCapability);
+            return localCapability as CapabilityById<K>;
+        }
+
+        return createDynamicCapabilityProxy(capabilityId) as CapabilityById<K>;
+    }
+
+    return {
+        get pluginId() {
+            return params.pluginId;
+        },
+        call,
+        get: getCapability,
+    };
+}
 
 function App() {
     const [component, setComponent] = useState<ComponentType<Record<string, unknown>> | null>(null);
@@ -125,10 +364,14 @@ function App() {
 }
 
 function bootstrap(): void {
-    // 标记当前窗口为插件视图沙箱环境，供 useCoreRuntime 切换桥接模式。
+    const params = parseParams();
+
     window.__PLUGIN_VIEW_SANDBOX__ = true;
-    // 暴露 React 运行时，便于未打包的外部插件视图编写交互组件。
     window.React = React;
+
+    const pluginApi = createSandboxPluginApi(params);
+    window.__PLUG_BOX_API__ = pluginApi;
+    window.__PLUG_BOX_API_FACTORY__ = async () => pluginApi;
 
     const root = document.getElementById('root');
     if (!root) {

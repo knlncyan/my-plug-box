@@ -1,21 +1,16 @@
 import service from '../../api/plugin.service';
-import type { ExecuteCommandOptions, ExecuteCommandPipelineOptions } from '../../domain/runtime';
-import type { CommandMeta, PluginSummary } from '../../domain/protocol/plugin-catalog.protocol';
+import type {
+    ExecuteCommandOptions,
+    ExecuteCommandPipelineOptions,
+    PluginRuntimeSnapshot,
+} from '../../domain/runtime';
+import type { PluginSummary } from '../../domain/protocol/plugin-catalog.protocol';
 import { PluginDisposable } from '../PluginDisposable';
 import { PluginAssetCatalogService } from './PluginAssetCatalogService';
 import { PluginCommandService } from './PluginCommandService';
 import { WorkerSandboxService } from './WorkerSandboxService';
 
 type Listener = () => void;
-
-export interface CoreRuntimeSnapshot {
-    loading: boolean;
-    ready: boolean;
-    error: string | null;
-    activeViewPluginId: string | null;
-    plugins: PluginSummary[];
-    commands: CommandMeta[];
-}
 
 interface PluginRuntimeServiceDeps {
     pluginAssetCatalogService: PluginAssetCatalogService;
@@ -42,7 +37,7 @@ function isDisabled(plugin: PluginSummary | undefined): boolean {
  * 2) 负责命令调度、视图切换和 Worker 生命周期。
  */
 export class PluginRuntimeService {
-    private snapshot: CoreRuntimeSnapshot = {
+    private snapshot: PluginRuntimeSnapshot = {
         loading: false,
         ready: false,
         error: null,
@@ -64,7 +59,9 @@ export class PluginRuntimeService {
         this.deps.workerSandboxService.setViewActivator((viewId: string) => {
             this.setActiveView(viewId);
         });
-        this.deps.pluginCommandService.setPluginActivator((pluginId, activationEvent) => this.ensurePluginReady(pluginId, activationEvent));
+        this.deps.pluginCommandService.setPluginActivator((pluginId, activationEvent) =>
+            this.ensurePluginReady(pluginId, activationEvent)
+        );
     }
 
     subscribe = (listener: Listener): (() => void) => {
@@ -72,7 +69,7 @@ export class PluginRuntimeService {
         return () => this.listeners.delete(listener);
     };
 
-    getSnapshot = (): CoreRuntimeSnapshot => this.snapshot;
+    getSnapshot = (): PluginRuntimeSnapshot => this.snapshot;
 
     initialize = async (): Promise<void> => {
         if (this.initPromise) return this.initPromise;
@@ -318,7 +315,7 @@ export class PluginRuntimeService {
         });
     }
 
-    private patch(partial: Partial<CoreRuntimeSnapshot>): void {
+    private patch(partial: Partial<PluginRuntimeSnapshot>): void {
         this.snapshot = { ...this.snapshot, ...partial };
         for (const listener of this.listeners) {
             listener();

@@ -1,4 +1,4 @@
-﻿import type { PluginModule } from '@plug-box/plugin-sdk';
+import type { PluginModule } from '@plug-box/plugin-sdk';
 
 const pluginId = 'external.demo-react';
 
@@ -10,7 +10,7 @@ const plugin: PluginModule = {
   commands: {
     'external.demo-react.open': (context) => {
       context.api.get('views').activate('external.demo-react.main');
-      return pluginId;
+      return null;
     },
     'external.demo-react.ping': () => {
       return 'pong';
@@ -19,3 +19,4 @@ const plugin: PluginModule = {
 };
 
 export default plugin;
+

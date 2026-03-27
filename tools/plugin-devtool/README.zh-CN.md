@@ -1,101 +1,97 @@
-﻿# Plug-Box 插件开发工具（最小版）
+# Plug-Box 鎻掍欢寮€鍙戝伐鍏?
+鐢ㄤ簬鍒涘缓鍜屾瀯寤哄閮ㄦ彃浠讹紝浜х墿缁撴瀯鐩存帴鍏煎 `public/plugins/<pluginId>/`銆?
+## 鍛戒护
 
-这个工具用于快速创建“外部插件”项目，并提供统一 SDK 类型与自动打包结构。
-
-## 功能
-
-1. `init`：创建插件项目目录（React 或 Vue）。
-2. `build`：自动输出可安装结构（`index.js`、`view/index.js`、`plugin.json`、`icon.*`）。
-3. 视图模块可直接 `import { createPluginApi } from '@plug-box/plugin-sdk'`，不需要手写 postMessage 桥接。
-
-## 创建项目
-
+1. 鍒濆鍖栭」鐩?
 ```bash
-node tools/plugin-devtool/bin/plugbox-plugin.mjs init my-notes-plugin --framework react
-# 或
-node tools/plugin-devtool/bin/plugbox-plugin.mjs init my-notes-plugin --framework vue
+node tools/plugin-devtool/bin/plugbox-plugin.mjs init my-plugin --framework react
+# 鎴?node tools/plugin-devtool/bin/plugbox-plugin.mjs init my-plugin --framework vue
 ```
 
-## 构建插件
+鍙€夊弬鏁帮細
+
+- `--plugin-id external.my-plugin`锛氳嚜瀹氫箟鎻掍欢 ID銆?
+2. 鏋勫缓鎻掍欢
 
 ```bash
-cd my-notes-plugin
-pnpm install
-pnpm build
+node tools/plugin-devtool/bin/plugbox-plugin.mjs build my-plugin
+# 鍦ㄩ」鐩洰褰曞唴涔熷彲鐩存帴锛?node ../tools/plugin-devtool/bin/plugbox-plugin.mjs build .
 ```
 
-构建后输出目录：`dist/<pluginId>/`
+## 鏋勫缓浜х墿
 
-- `dist/<pluginId>/index.js`
-- `dist/<pluginId>/view/index.js`
-- `dist/<pluginId>/plugin.json`
-- `dist/<pluginId>/icon.svg`（如果配置了 icon）
-- 其他打包产物（如 `assets/`）
+榛樿杈撳嚭鍒帮細
 
-说明：`dist/<pluginId>` 是自包含产物，不依赖宿主的 `public/plugin-sdk` 目录。
+`dist/<pluginId>/`
 
-## 安装到主应用
+鍏稿瀷鏂囦欢锛?
+- `index.js`锛堟彃浠堕€昏緫鍏ュ彛锛?- `view/index.js`锛堣鍥惧叆鍙ｏ紝鑻ラ厤缃簡 view锛?- `plugin.json`
+- `icon.svg`锛堣嫢閰嶇疆浜?icon锛?- `assets/*`
 
-将 `dist/<pluginId>` 目录内容复制到：
+閮ㄧ讲鏂瑰紡锛?
+灏?`dist/<pluginId>` 鏁翠釜鐩綍澶嶅埗鍒帮細
 
-`<app-root>/public/plugins/<plugin-id>/`
+`<app-root>/public/plugins/<pluginId>/`
 
-然后在应用内执行插件刷新 API（或重启应用）。
+鐒跺悗鍦ㄥ簲鐢ㄩ噷璋冪敤鍒锋柊鎻掍欢 API銆?
+## 閰嶇疆鏂囦欢
 
-## 配置文件
-
-每个插件项目包含 `plugbox.config.json`，用于生成最终 `plugin.json`。
-
-关键字段：
+姣忎釜鎻掍欢椤圭洰鍖呭惈 `plugbox.config.json`锛屾牳蹇冨瓧娈靛涓嬶細
 
 - `pluginId`
 - `name`
 - `version`
 - `activationEvents`
 - `commands`
-- `view`
+- `view`锛堝彲閫夛級
 - `entries.module`
-- `entries.view`
-- `entries.icon`
+- `entries.view`锛堝綋 `view` 瀛樺湪鏃跺繀濉級
+- `entries.icon`锛堝彲閫夛級
 - `outDir`
 
-## 视图入口规则（必须）
+## 鎻掍欢寮€鍙戞柟寮?
+### 1) 閫昏緫鍏ュ彛锛坄src/index.ts`锛?
+```ts
+import type { PluginModule } from '@plug-box/plugin-sdk';
 
-1. 视图入口路径由 `plugbox.config.json` 的 `entries.view` 决定，不强制必须是 `src/view/index.tsx`。
-2. 视图入口模块必须 `default export` 一个可渲染组件。
-3. React 项目可用 `tsx`，Vue 项目可用 `vue`，最终都会打包为 `dist/<pluginId>/view/index.js`。
-4. 视图里调用宿主能力请使用 SDK：`createPluginApi()` + `api.call/api.get`。
-5. 视图运行在浏览器沙箱中，不可使用 Node.js API（如 `fs`、`path`、`process`）。
+const plugin: PluginModule = {
+  pluginId: 'external.demo',
+  commands: {
+    'external.demo.open': (ctx) => {
+      ctx.api.get('views').activate('external.demo.main');
+      return null;
+    },
+  },
+};
 
-示例（React 视图）：
+export default plugin;
+```
 
+### 2) 瑙嗗浘鍏ュ彛锛堝 `src/view/index.tsx`锛?
 ```ts
 import { createPluginApi } from '@plug-box/plugin-sdk';
 
-export default function MyView() {
-  async function run() {
-    const api = await createPluginApi();
-    await api.call('command.execute', {
-      commandId: 'external.demo.open',
-      args: [],
-    });
-  }
+const api = await createPluginApi();
+await api.get('commands').execute('external.demo.open');
+// 鎴?await api.call('commands.execute', { commandId: 'external.demo.open', args: [] });
+```
 
-  return <button onClick={run}>Run</button>;
+## 鑳藉姏鎵╁睍涓庣被鍨嬫彁绀?
+SDK 鏀寔澹版槑鍚堝苟鎵╁睍鑳藉姏绫诲瀷锛?
+```ts
+declare module '@plug-box/plugin-sdk' {
+  interface PluginCapabilityMap {
+    files: {
+      open(path: string): Promise<void>;
+    };
+  }
 }
 ```
 
-## 常见错误
+涔嬪悗鍙洿鎺ヨ幏寰楃被鍨嬫彁绀猴細
 
-- `Component default export missing`：
-  视图入口没有默认导出组件。
-- `JSX.IntrinsicElements` 报错：
-  通常是 TypeScript 配置被错误覆盖，优先使用脚手架默认 `tsconfig.json`。
-- 能构建但视图空白：
-  先检查 `plugin.json` 的 `viewUrl`，再检查入口是否真的导出了组件。
+```ts
+const files = api.get('files');
+await files.open('E:/demo.txt');
+```
 
-## 说明
-
-- `src/index.ts`（逻辑模块）继续使用 `context.api` 风格。
-- `src/view/*`（视图模块）推荐使用 `createPluginApi()` 统一调用。
-- 本工具是最小可用版，默认只提供 build，不提供运行态预览。

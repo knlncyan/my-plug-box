@@ -1,61 +1,66 @@
-/**
- * 插件命令 Worker 入口：
- * 1) 运行在 Worker 环境，隔离插件命令执行上下文。
- * 2) 通过消息协议向宿主请求能力（命令、视图、事件、设置、存储等）。
- */
-import type {
-    CommandsCapability,
-    EventsCapability,
-    PluginHostAPI,
-    SettingsCapability,
-    StorageCapability,
-    ViewsCapability,
-} from '../../domain/api';
+import type { EventsCapability, PluginHostAPI, SettingsCapability } from '../../domain/api';
 import type { CapabilityById, CapabilityContract } from '../../domain/capability';
-import type {
-    HostEventMessage,
-    HostRequestMessage,
-    HostResponseMessage,
-    PendingRequest,
-    WorkerRequestMessage,
-    WorkerResponseMessage,
-} from '../../domain/worker';
+import {
+    createWorkerRpcClient,
+    createWorkerRpcServer,
+    type WorkerRpcEndpoint,
+} from '../utils/communicationUtils';
 import type {
     PluginModule,
     CommandExecutionContext,
-} from '../../domain/protocol/plugin-runtime.protocol';
+} from '../../domain/protocol/plugin-module.protocol';
 
+const WORKER_RPC_CHANNEL = 'plugin-worker-runtime';
+
+interface InvokeHostMethodPayload {
+    method: string;
+    params?: unknown;
+}
+
+declare global {
+    interface WorkerGlobalScope {
+        __PLUG_BOX_API_FACTORY__?: () => Promise<PluginHostAPI>;
+        __PLUG_BOX_API__?: PluginHostAPI;
+    }
+}
 
 let pluginId = '';
 let moduleUrl = '';
 let pluginModule: PluginModule | null = null;
 let activated = false;
-let settingsSnapshot: Record<string, unknown> = {};
-let storageSnapshot: Record<string, unknown> = {};
 let activeTrace: string[] = [];
 
-const pendingRequests = new Map<string, PendingRequest>();
-const capabilityProxyById = new Map<string, CapabilityContract>();
-const coreCapabilityCache = new Map<string, CapabilityContract>();
-const eventListeners = new Map<string, Set<(payload: unknown) => void>>();
+const capabilityCache = new Map<string, CapabilityContract>();
+
 const settingWatchers = new Map<string, Set<(value: unknown) => void>>();
-let requestSerial = 0;
-const importByUrl = new Function(
-    'url',
-    'return import(url);'
-) as (url: string) => Promise<{ default?: unknown }>;
+const settingSubscriptionByKey = new Map<string, string>();
+
+const eventWatchers = new Map<string, Set<(payload: unknown) => void>>();
+const eventSubscriptionByName = new Map<string, string>();
+
+const endpoint = self as unknown as WorkerRpcEndpoint;
+const rpcClient = createWorkerRpcClient({
+    channel: WORKER_RPC_CHANNEL,
+    endpoint,
+    requestTimeoutMs: 10_000,
+    requestIdPrefix: 'worker-host',
+});
+const rpcServer = createWorkerRpcServer({
+    channel: WORKER_RPC_CHANNEL,
+    endpoint,
+});
+
+const importByUrl = new Function('url', 'return import(url);') as (url: string) => Promise<{ default?: unknown }>;
 
 async function ensurePluginModule(): Promise<PluginModule> {
     if (pluginModule) return pluginModule;
     if (!pluginId) {
         throw new Error('Worker not initialized: missing pluginId');
     }
-
     if (!moduleUrl) {
         throw new Error(`Worker not initialized: missing moduleUrl for ${pluginId}`);
     }
 
-    // 通过 Function 包裹 dynamic import，避免 Vite 将 public 目录 URL 当源码模块处理。
     const loaded = await importByUrl(moduleUrl);
     if (!loaded.default) {
         throw new Error(`Plugin module default export missing: ${moduleUrl}`);
@@ -70,38 +75,59 @@ async function ensurePluginModule(): Promise<PluginModule> {
     return pluginModule;
 }
 
-function postHostResponse(requestId: string, result?: unknown, error?: string): void {
-    const message: HostResponseMessage = {
-        type: 'host-response',
-        requestId,
-        result,
-        error,
-    };
-    self.postMessage(message);
+async function callHost(method: string, params?: unknown): Promise<unknown> {
+    const payload: InvokeHostMethodPayload = { method, params };
+    return rpcClient.call('invokeHostMethod', payload);
 }
 
-/**
- * 向宿主发起通用能力调用。
- */
-function callHost(method: string, params?: unknown): Promise<unknown> {
-    requestSerial += 1;
-    const requestId = `${pluginId || 'plugin'}:${requestSerial}`;
-    const message: WorkerRequestMessage = {
-        type: 'worker-request',
-        requestId,
-        method,
-        params,
-    };
+async function ensureSettingSubscription(key: string): Promise<void> {
+    if (settingSubscriptionByKey.has(key)) return;
 
-    return new Promise((resolve, reject) => {
-        pendingRequests.set(requestId, { resolve, reject });
-        self.postMessage(message);
-    });
+    const subscriptionId = await callHost('settings.subscribe', key);
+    if (typeof subscriptionId !== 'string' || subscriptionId.length === 0) {
+        throw new Error(`settings.subscribe failed for key: ${key}`);
+    }
+
+    settingSubscriptionByKey.set(key, subscriptionId);
 }
 
-function notifySettingWatchers(key: string, value: unknown): void {
+async function releaseSettingSubscriptionIfUnused(key: string): Promise<void> {
+    const watchers = settingWatchers.get(key);
+    if (watchers && watchers.size > 0) return;
+
+    const subscriptionId = settingSubscriptionByKey.get(key);
+    if (!subscriptionId) return;
+
+    settingSubscriptionByKey.delete(key);
+    await callHost('settings.unsubscribe', subscriptionId);
+}
+
+async function ensureEventSubscription(eventName: string): Promise<void> {
+    if (eventSubscriptionByName.has(eventName)) return;
+
+    const subscriptionId = await callHost('events.subscribe', eventName);
+    if (typeof subscriptionId !== 'string' || subscriptionId.length === 0) {
+        throw new Error(`events.subscribe failed for event: ${eventName}`);
+    }
+
+    eventSubscriptionByName.set(eventName, subscriptionId);
+}
+
+async function releaseEventSubscriptionIfUnused(eventName: string): Promise<void> {
+    const watchers = eventWatchers.get(eventName);
+    if (watchers && watchers.size > 0) return;
+
+    const subscriptionId = eventSubscriptionByName.get(eventName);
+    if (!subscriptionId) return;
+
+    eventSubscriptionByName.delete(eventName);
+    await callHost('events.unsubscribe', subscriptionId);
+}
+
+function emitSettingValue(key: string, value: unknown): void {
     const watchers = settingWatchers.get(key);
     if (!watchers) return;
+
     for (const watcher of watchers) {
         try {
             watcher(value);
@@ -111,112 +137,99 @@ function notifySettingWatchers(key: string, value: unknown): void {
     }
 }
 
-function resolveBaseCapability(capabilityId: string): CapabilityContract | null {
-    const cached = coreCapabilityCache.get(capabilityId);
-    if (cached) return cached;
+function emitEventPayload(eventName: string, payload: unknown): void {
+    const watchers = eventWatchers.get(eventName);
+    if (!watchers) return;
 
-    let capability: CapabilityContract | null = null;
-
-    switch (capabilityId) {
-        case 'commands': {
-            const commands: CommandsCapability = {
-                execute: async (commandId: string, ...args: unknown[]) =>
-                    callHost('command.execute', {
-                        commandId,
-                        args,
-                        trace: activeTrace,
-                    }),
-            };
-            capability = commands as unknown as CapabilityContract;
-            break;
+    for (const watcher of watchers) {
+        try {
+            watcher(payload);
+        } catch (error) {
+            console.error(`[plugin-worker] events.on callback failed: ${eventName}`, error);
         }
-        case 'views': {
-            const views: ViewsCapability = {
-                activate: (viewId: string): void => {
-                    void callHost('view.activate', { viewId });
-                },
-            };
-            capability = views as unknown as CapabilityContract;
-            break;
-        }
-        case 'events': {
-            const events: EventsCapability = {
-                emit: (event: string, payload?: unknown): void => {
-                    void callHost('event.emit', { event, payload });
-                },
-                on: (event: string, handler: (payload: unknown) => void) => {
-                    let listeners = eventListeners.get(event);
-                    if (!listeners) {
-                        listeners = new Set();
-                        eventListeners.set(event, listeners);
-                    }
-                    listeners.add(handler);
-                    return {
-                        dispose: () => {
-                            listeners?.delete(handler);
-                            if (listeners && listeners.size === 0) {
-                                eventListeners.delete(event);
-                            }
-                        },
-                    };
-                },
-            };
-            capability = events as unknown as CapabilityContract;
-            break;
-        }
-        case 'settings': {
-            const settings: SettingsCapability = {
-                get: async <T>(key: string): Promise<T | undefined> => {
-                    const scopedKey = `${pluginId}.${key}`;
-                    return settingsSnapshot[scopedKey] as T | undefined;
-                },
-                set: async (key: string, value: unknown): Promise<void> => {
-                    const scopedKey = `${pluginId}.${key}`;
-                    settingsSnapshot[scopedKey] = value;
-                    notifySettingWatchers(key, value);
-                    await callHost('settings.set', { key, value });
-                },
-                onChange: <T>(key: string, handler: (value: T | undefined) => void) => {
-                    let watchers = settingWatchers.get(key);
-                    if (!watchers) {
-                        watchers = new Set();
-                        settingWatchers.set(key, watchers);
-                    }
-                    const wrapped = (value: unknown) => handler(value as T | undefined);
-                    watchers.add(wrapped);
-                    return {
-                        dispose: () => {
-                            watchers?.delete(wrapped);
-                            if (watchers && watchers.size === 0) {
-                                settingWatchers.delete(key);
-                            }
-                        },
-                    };
-                },
-            };
-            capability = settings as unknown as CapabilityContract;
-            break;
-        }
-        case 'storage': {
-            const storage: StorageCapability = {
-                get: async <T>(key: string): Promise<T | undefined> => {
-                    return storageSnapshot[key] as T | undefined;
-                },
-                set: async (key: string, value: unknown): Promise<void> => {
-                    storageSnapshot[key] = value;
-                    await callHost('storage.set', { key, value });
-                },
-            };
-            capability = storage as unknown as CapabilityContract;
-            break;
-        }
-        default:
-            capability = null;
     }
+}
 
-    if (!capability) return null;
-    coreCapabilityCache.set(capabilityId, capability);
-    return capability;
+function createDynamicCapabilityProxy(capabilityId: string): CapabilityContract {
+    const existing = capabilityCache.get(capabilityId);
+    if (existing) return existing;
+
+    const proxy = new Proxy(
+        {},
+        {
+            get: (_target, methodName) => {
+                if (typeof methodName !== 'string') return undefined;
+                return (...args: unknown[]) =>
+                    callHost(
+                        `${capabilityId}.${methodName}`,
+                        args.length <= 1 ? args[0] : args
+                    );
+            },
+        }
+    ) as CapabilityContract;
+
+    capabilityCache.set(capabilityId, proxy);
+    return proxy;
+}
+
+function createSettingsCapability(): SettingsCapability {
+    return {
+        get: async <T>(key: string): Promise<T | undefined> => {
+            return (await callHost('settings.get', key)) as T | undefined;
+        },
+        set: async (key: string, value: unknown): Promise<void> => {
+            await callHost('settings.set', { key, value });
+        },
+        onChange: <T>(key: string, handler: (value: T | undefined) => void) => {
+            let watchers = settingWatchers.get(key);
+            if (!watchers) {
+                watchers = new Set();
+                settingWatchers.set(key, watchers);
+            }
+
+            const wrapped = (value: unknown) => handler(value as T | undefined);
+            watchers.add(wrapped);
+            void ensureSettingSubscription(key);
+
+            return {
+                dispose: () => {
+                    watchers?.delete(wrapped);
+                    if (watchers && watchers.size === 0) {
+                        settingWatchers.delete(key);
+                    }
+                    void releaseSettingSubscriptionIfUnused(key);
+                },
+            };
+        },
+    };
+}
+
+function createEventsCapability(): EventsCapability {
+    return {
+        emit: (eventName: string, payload?: unknown): void => {
+            void callHost('events.emit', { event: eventName, payload });
+        },
+        on: (eventName: string, handler: (payload: unknown) => void) => {
+            let watchers = eventWatchers.get(eventName);
+            if (!watchers) {
+                watchers = new Set();
+                eventWatchers.set(eventName, watchers);
+            }
+
+            watchers.add(handler);
+            void ensureEventSubscription(eventName);
+
+            return {
+                dispose: () => {
+                    watchers?.delete(handler);
+                    if (watchers && watchers.size === 0) {
+                        eventWatchers.delete(eventName);
+                    }
+                    void releaseEventSubscriptionIfUnused(eventName);
+                },
+            };
+        },
+    };
 }
 
 const hostApi: PluginHostAPI = {
@@ -227,42 +240,23 @@ const hostApi: PluginHostAPI = {
         return (await callHost(method, params)) as T;
     },
     get: <K extends string>(capabilityId: K): CapabilityById<K> => {
-        const baseCapability = resolveBaseCapability(capabilityId);
-        if (baseCapability) {
-            return baseCapability as CapabilityById<K>;
+        if (capabilityId === 'settings') {
+            return createSettingsCapability() as CapabilityById<K>;
         }
 
-        const existing = capabilityProxyById.get(capabilityId);
-        if (existing) {
-            return existing as CapabilityById<K>;
+        if (capabilityId === 'events') {
+            return createEventsCapability() as CapabilityById<K>;
         }
 
-        // 通过 Proxy 将方法调用转发到宿主 capability.invoke 分发器。
-        const proxy = new Proxy(
-            {},
-            {
-                get: (_target, methodName) => {
-                    if (typeof methodName !== 'string') return undefined;
-                    return (...args: unknown[]) =>
-                        callHost('capability.invoke', {
-                            capabilityId,
-                            method: methodName,
-                            args,
-                        });
-                },
-            }
-        ) as CapabilityContract;
-
-        capabilityProxyById.set(capabilityId, proxy);
-        return proxy as CapabilityById<K>;
+        return createDynamicCapabilityProxy(capabilityId) as CapabilityById<K>;
     },
 };
 
-async function executeCommand(
-    commandId: string,
-    args: unknown[],
-    trace: string[]
-): Promise<unknown> {
+const workerScope = self as unknown as WorkerGlobalScope;
+workerScope.__PLUG_BOX_API_FACTORY__ = async () => hostApi;
+workerScope.__PLUG_BOX_API__ = hostApi;
+
+async function executeCommand(commandId: string, args: unknown[], trace: string[]): Promise<unknown> {
     const module = await ensurePluginModule();
     const handler = module.commands?.[commandId];
     if (!handler) {
@@ -295,117 +289,75 @@ async function deactivatePlugin(): Promise<void> {
     activated = false;
 }
 
-function handleWorkerResponse(msg: WorkerResponseMessage): void {
-    const pending = pendingRequests.get(msg.requestId);
-    if (!pending) return;
+function handleCapabilitySubscription(payload: unknown): void {
+    const data = payload as { subscriptionId?: unknown; data?: unknown };
+    if (!data || typeof data !== 'object') return;
+    if (typeof data.subscriptionId !== 'string') return;
 
-    pendingRequests.delete(msg.requestId);
-    if (msg.error) {
-        pending.reject(new Error(msg.error));
-    } else {
-        pending.resolve(msg.result);
-    }
-}
-
-function handleHostEvent(msg: HostEventMessage): void {
-    if (msg.event === 'setting.changed' && msg.payload && typeof msg.payload === 'object') {
-        const data = msg.payload as { key?: unknown; value?: unknown };
-        if (typeof data.key === 'string') {
-            const scopedKey = `${pluginId}.${data.key}`;
-            settingsSnapshot[scopedKey] = data.value;
-            notifySettingWatchers(data.key, data.value);
+    for (const [key, subscriptionId] of settingSubscriptionByKey.entries()) {
+        if (subscriptionId === data.subscriptionId) {
+            emitSettingValue(key, data.data);
+            return;
         }
     }
 
-    const listeners = eventListeners.get(msg.event);
-    if (!listeners) return;
-    for (const listener of listeners) {
-        try {
-            listener(msg.payload);
-        } catch (error) {
-            console.error(`[plugin-worker] event listener failed: ${msg.event}`, error);
+    for (const [eventName, subscriptionId] of eventSubscriptionByName.entries()) {
+        if (subscriptionId === data.subscriptionId) {
+            emitEventPayload(eventName, data.data);
+            return;
         }
     }
 }
 
-async function handleHostRequest(msg: HostRequestMessage): Promise<void> {
-    try {
-        switch (msg.action) {
-            case 'init': {
-                const payload = msg.payload as Record<string, unknown>;
-                const nextPluginId = payload.pluginId;
-                const nextModuleUrl = payload.moduleUrl;
-                if (typeof nextPluginId !== 'string' || nextPluginId.length === 0) {
-                    throw new Error('Worker init missing pluginId');
-                }
-                if (typeof nextModuleUrl !== 'string' || nextModuleUrl.length === 0) {
-                    throw new Error('Worker init missing moduleUrl');
-                }
-                pluginId = nextPluginId;
-                moduleUrl = nextModuleUrl;
-                pluginModule = null;
-                settingsSnapshot = { ...(payload.settings as Record<string, unknown> ?? {}) };
-                storageSnapshot = { ...(payload.storage as Record<string, unknown> ?? {}) };
-                await ensurePluginModule();
-                postHostResponse(msg.requestId, null);
-                return;
-            }
-            case 'activate': {
-                await activatePlugin();
-                postHostResponse(msg.requestId, null);
-                return;
-            }
-            case 'deactivate': {
-                await deactivatePlugin();
-                postHostResponse(msg.requestId, null);
-                return;
-            }
-            case 'execute-command': {
-                const payload = msg.payload as Record<string, unknown>;
-                const commandId = payload.commandId;
-                const args = payload.args;
-                const trace = payload.trace;
-                if (typeof commandId !== 'string' || commandId.length === 0) {
-                    throw new Error('Worker execute-command missing commandId');
-                }
-                if (!Array.isArray(args)) {
-                    throw new Error('Worker execute-command invalid args');
-                }
-                const result = await executeCommand(
-                    commandId,
-                    args,
-                    Array.isArray(trace) ? (trace as string[]) : []
-                );
-                postHostResponse(msg.requestId, result);
-                return;
-            }
-            default:
-                throw new Error(`Unsupported host request action: ${String(msg.action)}`);
-        }
-    } catch (error) {
-        postHostResponse(msg.requestId, undefined, error instanceof Error ? error.message : String(error));
+rpcClient.on('capability.subscription', (payload) => {
+    handleCapabilitySubscription(payload);
+});
+
+rpcServer.register('init', async (payload) => {
+    const data = payload as { pluginId?: unknown; moduleUrl?: unknown };
+    if (typeof data?.pluginId !== 'string' || data.pluginId.length === 0) {
+        throw new Error('Worker init missing pluginId');
     }
-}
-
-self.addEventListener('message', (event: MessageEvent<unknown>) => {
-    const msg = event.data as
-        | HostRequestMessage
-        | WorkerResponseMessage
-        | HostEventMessage
-        | undefined;
-    if (!msg || typeof msg !== 'object' || typeof msg.type !== 'string') return;
-
-    if (msg.type === 'host-request') {
-        void handleHostRequest(msg);
-        return;
+    if (typeof data?.moduleUrl !== 'string' || data.moduleUrl.length === 0) {
+        throw new Error('Worker init missing moduleUrl');
     }
 
-    if (msg.type === 'worker-response') {
-        handleWorkerResponse(msg);
-        return;
+    pluginId = data.pluginId;
+    moduleUrl = data.moduleUrl;
+    pluginModule = null;
+
+    settingWatchers.clear();
+    settingSubscriptionByKey.clear();
+    eventWatchers.clear();
+    eventSubscriptionByName.clear();
+    capabilityCache.clear();
+
+    await ensurePluginModule();
+    return null;
+});
+
+rpcServer.register('activate', async () => {
+    await activatePlugin();
+    return null;
+});
+
+rpcServer.register('deactivate', async () => {
+    await deactivatePlugin();
+    return null;
+});
+
+rpcServer.register('executeCommand', async (payload) => {
+    const data = payload as { commandId?: unknown; args?: unknown; trace?: unknown };
+    if (typeof data?.commandId !== 'string' || data.commandId.length === 0) {
+        throw new Error('Worker executeCommand missing commandId');
+    }
+    if (!Array.isArray(data.args)) {
+        throw new Error('Worker executeCommand invalid args');
     }
 
-    if (msg.type === 'host-event') {
-        handleHostEvent(msg);
-    }
+    return executeCommand(
+        data.commandId,
+        data.args,
+        Array.isArray(data.trace) ? (data.trace as string[]) : []
+    );
 });

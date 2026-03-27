@@ -1,8 +1,8 @@
-﻿/**
+/**
  * Built-in command palette plugin module.
  * Demonstrates startup/command/view activation hooks and provides command handlers.
  */
-import type { PluginModule } from '../../domain/protocol/plugin-runtime.protocol';
+import type { PluginModule } from '../../domain/protocol/plugin-module.protocol';
 
 let verboseSettingWatcher: { dispose(): void } | null = null;
 

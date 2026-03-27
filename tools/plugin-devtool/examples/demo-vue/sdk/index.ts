@@ -1,6 +1,9 @@
-﻿export interface PluginDisposable {
+export interface PluginDisposable {
   dispose(): void;
 }
+
+export type CapabilityMethod = (...args: unknown[]) => unknown | Promise<unknown>;
+export type CapabilityContract = Record<string, CapabilityMethod>;
 
 export interface CommandsCapability {
   execute(commandId: string, ...args: unknown[]): Promise<unknown>;
@@ -26,20 +29,23 @@ export interface StorageCapability {
   set(key: string, value: unknown): Promise<void>;
 }
 
-export type PluginCapabilityMap = {
+export interface PluginCapabilityMap {
   commands: CommandsCapability;
   views: ViewsCapability;
   events: EventsCapability;
   settings: SettingsCapability;
   storage: StorageCapability;
-} & Record<string, Record<string, unknown>>;
+}
+
+export type CapabilityById<K extends string> =
+  K extends keyof PluginCapabilityMap
+    ? PluginCapabilityMap[K]
+    : CapabilityContract;
 
 export interface PluginHostAPI {
   readonly pluginId: string;
   call<T = unknown>(method: string, params?: unknown): Promise<T>;
-  get<K extends string>(id: K): K extends keyof PluginCapabilityMap
-    ? PluginCapabilityMap[K]
-    : Record<string, unknown>;
+  get<K extends string>(id: K): CapabilityById<K>;
 }
 
 export interface CommandExecutionContext {
@@ -64,28 +70,39 @@ type GlobalWithApiFactory = typeof globalThis & {
 };
 
 function isValidApi(value: unknown): value is PluginHostAPI {
-  return !!value && typeof value === 'object' &&
-    typeof (value as PluginHostAPI).call === 'function' &&
-    typeof (value as PluginHostAPI).get === 'function';
+  return !!value
+    && typeof value === 'object'
+    && typeof (value as PluginHostAPI).call === 'function'
+    && typeof (value as PluginHostAPI).get === 'function';
 }
+
+let cachedApiPromise: Promise<PluginHostAPI> | null = null;
 
 export async function createPluginApi(seedApi?: unknown): Promise<PluginHostAPI> {
   if (isValidApi(seedApi)) {
     return seedApi;
   }
 
-  const globalScope = globalThis as GlobalWithApiFactory;
-
-  if (typeof globalScope.__PLUG_BOX_API_FACTORY__ === 'function') {
-    const api = await globalScope.__PLUG_BOX_API_FACTORY__();
-    if (isValidApi(api)) return api;
+  if (cachedApiPromise) {
+    return cachedApiPromise;
   }
 
-  if (isValidApi(globalScope.__PLUG_BOX_API__)) {
-    return globalScope.__PLUG_BOX_API__;
-  }
+  cachedApiPromise = (async () => {
+    const globalScope = globalThis as GlobalWithApiFactory;
 
-  throw new Error('[plugin-sdk] Plugin API factory is not available in current runtime');
+    if (typeof globalScope.__PLUG_BOX_API_FACTORY__ === 'function') {
+      const api = await globalScope.__PLUG_BOX_API_FACTORY__();
+      if (isValidApi(api)) return api;
+    }
+
+    if (isValidApi(globalScope.__PLUG_BOX_API__)) {
+      return globalScope.__PLUG_BOX_API__;
+    }
+
+    throw new Error('[plugin-sdk] Plugin API factory is not available in current runtime');
+  })();
+
+  return cachedApiPromise;
 }
 
 export async function createViewApi(seedApi?: unknown): Promise<PluginHostAPI> {

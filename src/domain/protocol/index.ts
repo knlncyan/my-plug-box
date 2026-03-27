@@ -1,3 +1,3 @@
 export * from './plugin-catalog.protocol';
-export * from './plugin-runtime.protocol';
-export * from './plugin-view-runtime-bridge.protocol';
+export * from './plugin-module.protocol';
+export * from './plugin-view-rpc.protocol';

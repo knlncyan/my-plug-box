@@ -1,4 +1,4 @@
-﻿import { SimpleContainer } from './ioc/SimpleContainer';
+import { SimpleContainer } from './ioc/SimpleContainer';
 import { PluginAssetCatalogService } from './service/PluginAssetCatalogService';
 import { PluginCommandService } from './service/PluginCommandService';
 import { PluginRuntimeService } from './service/PluginRuntimeService';
@@ -71,8 +71,7 @@ export function registerCapability<K extends string>(
 
 export { useCoreRuntime } from './useCoreRuntime';
 
-export type { ExecuteCommandOptions } from '../domain/runtime';
-export type { CoreRuntimeSnapshot as PluginRuntimeSnapshot } from './service/PluginRuntimeService';
+export type { ExecuteCommandOptions, PluginRuntimeSnapshot } from '../domain/runtime';
 export type {
     CapabilityContext,
     CapabilityContract,

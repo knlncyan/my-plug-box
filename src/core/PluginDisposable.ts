@@ -1,4 +1,4 @@
-﻿type Disposable = () => void | Promise<void>;
+type Disposable = () => void | Promise<void>;
 
 export class PluginDisposable {
     private disposables = new Map<string, Set<Disposable>>();
@@ -41,10 +41,5 @@ export class PluginDisposable {
                 console.error(`[PluginDisposable] Error disposing resource for ${pluginId}:`, error);
             }
         }
-    }
-
-    // 可选：提供查询接口（用于调试）
-    has(pluginId: string): boolean {
-        return this.disposables.has(pluginId);
     }
 }

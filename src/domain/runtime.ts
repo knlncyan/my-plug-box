@@ -1,4 +1,4 @@
-﻿import type { CommandMeta, PluginSummary } from './protocol/plugin-catalog.protocol';
+import type { CommandMeta, PluginSummary } from './protocol/plugin-catalog.protocol';
 
 /**
  * 命令执行可选参数：
@@ -19,14 +19,14 @@ export interface ExecuteCommandPipelineOptions extends ExecuteCommandOptions {
 }
 
 /**
- * 前端插件运行时快照：
+ * 前端运行时快照：
  * - 提供主界面与插件视图沙箱同步状态使用。
  */
 export interface PluginRuntimeSnapshot {
     loading: boolean;
     ready: boolean;
     error: string | null;
-    activeViewId: string | null;
+    activeViewPluginId: string | null;
     plugins: PluginSummary[];
     commands: CommandMeta[];
 }

@@ -1,7 +1,8 @@
-﻿#!/usr/bin/env node
+#!/usr/bin/env node
 import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
+import { spawnSync } from 'node:child_process';
 
 function parseArgs(argv) {
   const args = [...argv];
@@ -41,6 +42,21 @@ function writeFile(filePath, content) {
   fs.writeFileSync(filePath, content, { encoding: 'utf8' });
 }
 
+function ensureString(value, field) {
+  if (typeof value !== 'string' || value.trim().length === 0) {
+    throw new Error(`[plugbox] invalid field: ${field}`);
+  }
+  return value.trim();
+}
+
+function normalizePluginId(raw) {
+  const pluginId = ensureString(raw, 'pluginId');
+  if (!/^[a-zA-Z0-9][a-zA-Z0-9._-]*$/.test(pluginId)) {
+    throw new Error('[plugbox] pluginId must match /^[a-zA-Z0-9][a-zA-Z0-9._-]*$/');
+  }
+  return pluginId;
+}
+
 function buildScript(framework) {
   const frameworkPluginImport = framework === 'vue'
     ? "import vue from '@vitejs/plugin-vue';"
@@ -68,18 +84,23 @@ function ensureString(value, field) {
   if (typeof value !== 'string' || value.trim().length === 0) {
     throw new Error(\`[plugbox-build] invalid field: \${field}\`);
   }
-  return value;
+  return value.trim();
 }
 
 async function main() {
   const cfg = readConfig();
-
   const pluginId = ensureString(cfg.pluginId, 'pluginId');
   const outRootDir = path.resolve(root, typeof cfg.outDir === 'string' ? cfg.outDir : 'dist');
   const outDir = path.resolve(outRootDir, pluginId);
 
   const moduleEntry = path.resolve(root, ensureString(cfg.entries?.module, 'entries.module'));
-  const viewEntry = path.resolve(root, ensureString(cfg.entries?.view, 'entries.view'));
+  const hasView = !!cfg.view;
+  const rollupInput = { index: moduleEntry };
+
+  if (hasView) {
+    const viewEntry = path.resolve(root, ensureString(cfg.entries?.view, 'entries.view'));
+    rollupInput['view/index'] = viewEntry;
+  }
 
   await build({
     configFile: false,
@@ -100,10 +121,7 @@ async function main() {
       target: 'es2020',
       rollupOptions: {
         preserveEntrySignatures: 'strict',
-        input: {
-          index: moduleEntry,
-          'view/index': viewEntry,
-        },
+        input: rollupInput,
         output: {
           format: 'es',
           entryFileNames: '[name].js',
@@ -118,7 +136,7 @@ async function main() {
     ? path.resolve(root, cfg.entries.icon)
     : null;
   const iconTargetRel = iconSource && fs.existsSync(iconSource)
-    ? "/plugins/" + pluginId + "/icon" + path.extname(iconSource)
+    ? '/plugins/' + pluginId + '/icon' + path.extname(iconSource)
     : undefined;
 
   if (iconSource && fs.existsSync(iconSource)) {
@@ -132,10 +150,10 @@ async function main() {
     version: ensureString(cfg.version, 'version'),
     description: typeof cfg.description === 'string' ? cfg.description : '',
     activationEvents: Array.isArray(cfg.activationEvents) ? cfg.activationEvents : [],
-    view: cfg.view ?? undefined,
+    view: hasView ? (cfg.view ?? undefined) : undefined,
     commands: Array.isArray(cfg.commands) ? cfg.commands : [],
     moduleUrl: '/plugins/' + pluginId + '/index.js',
-    viewUrl: '/plugins/' + pluginId + '/view/index.js',
+    viewUrl: hasView ? '/plugins/' + pluginId + '/view/index.js' : undefined,
     icon: iconTargetRel,
   };
 
@@ -159,6 +177,9 @@ function sdkIndexTs() {
   return `export interface PluginDisposable {
   dispose(): void;
 }
+
+export type CapabilityMethod = (...args: unknown[]) => unknown | Promise<unknown>;
+export type CapabilityContract = Record<string, CapabilityMethod>;
 
 export interface CommandsCapability {
   execute(commandId: string, ...args: unknown[]): Promise<unknown>;
@@ -184,20 +205,23 @@ export interface StorageCapability {
   set(key: string, value: unknown): Promise<void>;
 }
 
-export type PluginCapabilityMap = {
+export interface PluginCapabilityMap {
   commands: CommandsCapability;
   views: ViewsCapability;
   events: EventsCapability;
   settings: SettingsCapability;
   storage: StorageCapability;
-} & Record<string, Record<string, unknown>>;
+}
+
+export type CapabilityById<K extends string> =
+  K extends keyof PluginCapabilityMap
+    ? PluginCapabilityMap[K]
+    : CapabilityContract;
 
 export interface PluginHostAPI {
   readonly pluginId: string;
   call<T = unknown>(method: string, params?: unknown): Promise<T>;
-  get<K extends string>(id: K): K extends keyof PluginCapabilityMap
-    ? PluginCapabilityMap[K]
-    : Record<string, unknown>;
+  get<K extends string>(id: K): CapabilityById<K>;
 }
 
 export interface CommandExecutionContext {
@@ -222,28 +246,39 @@ type GlobalWithApiFactory = typeof globalThis & {
 };
 
 function isValidApi(value: unknown): value is PluginHostAPI {
-  return !!value && typeof value === 'object' &&
-    typeof (value as PluginHostAPI).call === 'function' &&
-    typeof (value as PluginHostAPI).get === 'function';
+  return !!value
+    && typeof value === 'object'
+    && typeof (value as PluginHostAPI).call === 'function'
+    && typeof (value as PluginHostAPI).get === 'function';
 }
+
+let cachedApiPromise: Promise<PluginHostAPI> | null = null;
 
 export async function createPluginApi(seedApi?: unknown): Promise<PluginHostAPI> {
   if (isValidApi(seedApi)) {
     return seedApi;
   }
 
-  const globalScope = globalThis as GlobalWithApiFactory;
-
-  if (typeof globalScope.__PLUG_BOX_API_FACTORY__ === 'function') {
-    const api = await globalScope.__PLUG_BOX_API_FACTORY__();
-    if (isValidApi(api)) return api;
+  if (cachedApiPromise) {
+    return cachedApiPromise;
   }
 
-  if (isValidApi(globalScope.__PLUG_BOX_API__)) {
-    return globalScope.__PLUG_BOX_API__;
-  }
+  cachedApiPromise = (async () => {
+    const globalScope = globalThis as GlobalWithApiFactory;
 
-  throw new Error('[plugin-sdk] Plugin API factory is not available in current runtime');
+    if (typeof globalScope.__PLUG_BOX_API_FACTORY__ === 'function') {
+      const api = await globalScope.__PLUG_BOX_API_FACTORY__();
+      if (isValidApi(api)) return api;
+    }
+
+    if (isValidApi(globalScope.__PLUG_BOX_API__)) {
+      return globalScope.__PLUG_BOX_API__;
+    }
+
+    throw new Error('[plugin-sdk] Plugin API factory is not available in current runtime');
+  })();
+
+  return cachedApiPromise;
 }
 
 export async function createViewApi(seedApi?: unknown): Promise<PluginHostAPI> {
@@ -385,7 +420,7 @@ const plugin: PluginModule = {
   commands: {
     '${pluginId}.open': (context) => {
       context.api.get('views').activate('${pluginId}.main');
-      return pluginId;
+      return null;
     },
     '${pluginId}.ping': () => {
       return 'pong';
@@ -489,6 +524,7 @@ function tsConfig(framework) {
       isolatedModules: true,
       noEmit: true,
       jsx,
+      lib: ['ES2020', 'DOM'],
       baseUrl: '.',
       paths: {
         '@plug-box/plugin-sdk': ['./sdk/index.ts'],
@@ -498,13 +534,14 @@ function tsConfig(framework) {
   }, null, 2) + '\n';
 }
 
-function createProject(targetDir, framework) {
+function createProject(targetDir, framework, pluginIdOption) {
   if (fs.existsSync(targetDir) && fs.readdirSync(targetDir).length > 0) {
     throw new Error(`Target directory is not empty: ${targetDir}`);
   }
 
   const projectName = path.basename(targetDir);
-  const pluginId = `external.${projectName.replace(/[^a-zA-Z0-9.-]/g, '-').toLowerCase()}`;
+  const defaultPluginId = `external.${projectName.replace(/[^a-zA-Z0-9.-]/g, '-').toLowerCase()}`;
+  const pluginId = normalizePluginId(pluginIdOption ?? defaultPluginId);
 
   ensureDir(targetDir);
   ensureDir(path.join(targetDir, 'src/view'));
@@ -537,12 +574,29 @@ function createProject(targetDir, framework) {
   console.info('  1) cd ' + targetDir);
   console.info('  2) pnpm install');
   console.info('  3) pnpm build');
-  console.info('  4) copy dist to app/public/plugins/<plugin-id>');
+  console.info('  4) copy dist/<pluginId> to app/public/plugins/<pluginId>');
+}
+
+function runBuild(projectDir) {
+  const targetDir = path.resolve(projectDir);
+  const scriptPath = path.resolve(targetDir, 'scripts/build.mjs');
+  if (!fs.existsSync(scriptPath)) {
+    throw new Error(`[plugbox-plugin] build script not found: ${scriptPath}`);
+  }
+
+  const result = spawnSync(process.execPath, [scriptPath], {
+    cwd: targetDir,
+    stdio: 'inherit',
+  });
+  if (result.status !== 0) {
+    throw new Error(`[plugbox-plugin] build failed: ${targetDir}`);
+  }
 }
 
 function printHelp() {
   console.info('Usage:');
-  console.info('  node tools/plugin-devtool/bin/plugbox-plugin.mjs init <project-dir> [--framework react|vue]');
+  console.info('  node tools/plugin-devtool/bin/plugbox-plugin.mjs init <project-dir> [--framework react|vue] [--plugin-id <id>]');
+  console.info('  node tools/plugin-devtool/bin/plugbox-plugin.mjs build [project-dir]');
 }
 
 async function main() {
@@ -552,21 +606,29 @@ async function main() {
     return;
   }
 
-  if (command !== 'init') {
-    throw new Error('Unsupported command: ' + command);
+  if (command === 'init') {
+    const projectDir = positional[0];
+    if (!projectDir) {
+      throw new Error('Missing project directory');
+    }
+
+    const framework = String(options.framework ?? 'react').toLowerCase();
+    if (framework !== 'react' && framework !== 'vue') {
+      throw new Error('framework must be react or vue');
+    }
+
+    const pluginIdOption = options['plugin-id'] ? String(options['plugin-id']) : undefined;
+    createProject(path.resolve(process.cwd(), projectDir), framework, pluginIdOption);
+    return;
   }
 
-  const projectDir = positional[0];
-  if (!projectDir) {
-    throw new Error('Missing project directory');
+  if (command === 'build') {
+    const projectDir = positional[0] ? path.resolve(process.cwd(), positional[0]) : process.cwd();
+    runBuild(projectDir);
+    return;
   }
 
-  const framework = String(options.framework ?? 'react').toLowerCase();
-  if (framework !== 'react' && framework !== 'vue') {
-    throw new Error('framework must be react or vue');
-  }
-
-  createProject(path.resolve(process.cwd(), projectDir), framework);
+  throw new Error('Unsupported command: ' + command);
 }
 
 main().catch((error) => {

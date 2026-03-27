@@ -1,4 +1,4 @@
-﻿import fs from 'node:fs';
+import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { build } from 'vite';
@@ -18,30 +18,35 @@ function ensureString(value, field) {
   if (typeof value !== 'string' || value.trim().length === 0) {
     throw new Error(`[plugbox-build] invalid field: ${field}`);
   }
-  return value;
+  return value.trim();
 }
 
 async function main() {
   const cfg = readConfig();
-
   const pluginId = ensureString(cfg.pluginId, 'pluginId');
   const outRootDir = path.resolve(root, typeof cfg.outDir === 'string' ? cfg.outDir : 'dist');
   const outDir = path.resolve(outRootDir, pluginId);
 
   const moduleEntry = path.resolve(root, ensureString(cfg.entries?.module, 'entries.module'));
-  const viewEntry = path.resolve(root, ensureString(cfg.entries?.view, 'entries.view'));
+  const hasView = !!cfg.view;
+  const rollupInput = { index: moduleEntry };
+
+  if (hasView) {
+    const viewEntry = path.resolve(root, ensureString(cfg.entries?.view, 'entries.view'));
+    rollupInput['view/index'] = viewEntry;
+  }
 
   await build({
     configFile: false,
     root,
     plugins: [react()],
     resolve: {
-      alias: {
-        '@plug-box/plugin-sdk': path.resolve(root, 'sdk/index.ts'),
-        react: path.resolve(root, 'sdk/react.ts'),
-        'react/jsx-runtime': path.resolve(root, 'sdk/react-jsx-runtime.ts'),
-        'react/jsx-dev-runtime': path.resolve(root, 'sdk/react-jsx-runtime.ts'),
-      },
+      alias: [
+        { find: '@plug-box/plugin-sdk', replacement: path.resolve(root, 'sdk/index.ts') },
+        { find: 'react/jsx-runtime', replacement: path.resolve(root, 'sdk/react-jsx-runtime.ts') },
+        { find: 'react/jsx-dev-runtime', replacement: path.resolve(root, 'sdk/react-jsx-runtime.ts') },
+        { find: /^react$/, replacement: path.resolve(root, 'sdk/react.ts') },
+      ],
     },
     build: {
       outDir,
@@ -50,10 +55,7 @@ async function main() {
       target: 'es2020',
       rollupOptions: {
         preserveEntrySignatures: 'strict',
-        input: {
-          index: moduleEntry,
-          'view/index': viewEntry,
-        },
+        input: rollupInput,
         output: {
           format: 'es',
           entryFileNames: '[name].js',
@@ -68,7 +70,7 @@ async function main() {
     ? path.resolve(root, cfg.entries.icon)
     : null;
   const iconTargetRel = iconSource && fs.existsSync(iconSource)
-    ? "/plugins/" + pluginId + "/icon" + path.extname(iconSource)
+    ? '/plugins/' + pluginId + '/icon' + path.extname(iconSource)
     : undefined;
 
   if (iconSource && fs.existsSync(iconSource)) {
@@ -82,10 +84,10 @@ async function main() {
     version: ensureString(cfg.version, 'version'),
     description: typeof cfg.description === 'string' ? cfg.description : '',
     activationEvents: Array.isArray(cfg.activationEvents) ? cfg.activationEvents : [],
-    view: cfg.view ?? undefined,
+    view: hasView ? (cfg.view ?? undefined) : undefined,
     commands: Array.isArray(cfg.commands) ? cfg.commands : [],
     moduleUrl: '/plugins/' + pluginId + '/index.js',
-    viewUrl: '/plugins/' + pluginId + '/view/index.js',
+    viewUrl: hasView ? '/plugins/' + pluginId + '/view/index.js' : undefined,
     icon: iconTargetRel,
   };
 
@@ -102,5 +104,3 @@ main().catch((error) => {
   console.error(error);
   process.exit(1);
 });
-
-

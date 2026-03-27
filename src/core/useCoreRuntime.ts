@@ -1,13 +1,11 @@
-﻿import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { coreRuntime } from './index';
-import type { ExecuteCommandOptions } from '../domain/runtime';
+import { createWindowRpcClient, type WindowRpcClient } from './utils/communicationUtils';
+import type { ExecuteCommandOptions, PluginRuntimeSnapshot } from '../domain/runtime';
 import type {
     PluginViewExecuteCommandPayload,
-    PluginViewRuntimeRequestMessage,
     PluginViewSetActiveViewPayload,
-} from '../domain/protocol/plugin-view-runtime-bridge.protocol';
-
-type CoreRuntimeSnapshot = ReturnType<typeof coreRuntime.getSnapshot>;
+} from '../domain/protocol/plugin-view-rpc.protocol';
 
 declare global {
     interface Window {
@@ -15,7 +13,7 @@ declare global {
     }
 }
 
-const EMPTY_SNAPSHOT: CoreRuntimeSnapshot = {
+const EMPTY_SNAPSHOT: PluginRuntimeSnapshot = {
     loading: true,
     ready: false,
     error: null,
@@ -23,11 +21,6 @@ const EMPTY_SNAPSHOT: CoreRuntimeSnapshot = {
     plugins: [],
     commands: [],
 };
-
-interface PendingCall {
-    resolve: (value: unknown) => void;
-    reject: (reason?: unknown) => void;
-}
 
 function isPluginViewSandbox(): boolean {
     return window.__PLUGIN_VIEW_SANDBOX__ === true;
@@ -49,96 +42,57 @@ function useHostRuntime() {
 }
 
 function useSandboxRuntime() {
-    const [snapshot, setSnapshot] = useState<CoreRuntimeSnapshot>(EMPTY_SNAPSHOT);
-    const pendingRef = useRef(new Map<string, PendingCall>());
-    const requestSerialRef = useRef(0);
+    const [snapshot, setSnapshot] = useState<PluginRuntimeSnapshot>(EMPTY_SNAPSHOT);
 
-    const callParent = useCallback(
-        (action: PluginViewRuntimeRequestMessage['action'], payload?: unknown): Promise<unknown> => {
-            requestSerialRef.current += 1;
-            const requestId = `sandbox:${requestSerialRef.current}`;
-            const message: PluginViewRuntimeRequestMessage = {
-                type: 'plugin-view-runtime-request',
-                requestId,
-                action,
-                payload,
-            };
-
-            return new Promise((resolve, reject) => {
-                pendingRef.current.set(requestId, { resolve, reject });
-                window.parent.postMessage(message, '*');
-            });
-        },
+    const rpcClient = useMemo<WindowRpcClient>(
+        () =>
+            createWindowRpcClient({
+                channel: 'plugin-view-runtime',
+                requestIdPrefix: 'sandbox',
+                requestTimeoutMs: 10_000,
+                targetWindow: () => window.parent,
+                sourceWindow: () => window.parent,
+            }),
         []
     );
 
     useEffect(() => {
-        function handleMessage(event: MessageEvent<unknown>): void {
-            const data = event.data as { type?: unknown } & Record<string, unknown>;
-            if (!data || typeof data !== 'object' || typeof data.type !== 'string') return;
+        const disposeSnapshotListener = rpcClient.on('runtime.snapshot', (nextSnapshot) => {
+            setSnapshot(nextSnapshot as PluginRuntimeSnapshot);
+        });
 
-            if (data.type === 'plugin-view-runtime-response') {
-                const requestId = data.requestId;
-                if (typeof requestId !== 'string') return;
-                const pending = pendingRef.current.get(requestId);
-                if (!pending) return;
-
-                pendingRef.current.delete(requestId);
-                if (data.success === true) {
-                    pending.resolve(data.result);
-                } else {
-                    pending.reject(new Error(String(data.error ?? 'runtime bridge request failed')));
-                }
-                return;
-            }
-
-            if (data.type === 'plugin-view-runtime-snapshot' && data.snapshot) {
-                setSnapshot(data.snapshot as CoreRuntimeSnapshot);
-            }
-        }
-
-        window.addEventListener('message', handleMessage);
-
-        void callParent('getSnapshot')
+        void rpcClient
+            .call<PluginRuntimeSnapshot>('getSnapshot')
             .then((value) => {
-                setSnapshot(value as CoreRuntimeSnapshot);
+                setSnapshot(value);
             })
             .catch((error) => {
                 setSnapshot((prev) => ({ ...prev, loading: false, ready: false, error: String(error) }));
             });
 
-        void callParent('subscribe');
+        void rpcClient.call('subscribe');
 
         return () => {
-            window.removeEventListener('message', handleMessage);
-            void callParent('unsubscribe');
-
-            for (const pending of pendingRef.current.values()) {
-                pending.reject(new Error('runtime bridge disposed'));
-            }
-            pendingRef.current.clear();
+            disposeSnapshotListener();
+            void rpcClient.call('unsubscribe').catch(() => undefined);
+            rpcClient.dispose();
         };
-    }, [callParent]);
+    }, [rpcClient]);
 
-    const executeCommand = useCallback(
-        async (commandId: string, options?: ExecuteCommandOptions, ...args: unknown[]) => {
-            const payload: PluginViewExecuteCommandPayload = { commandId, args, options };
-            return callParent('executeCommand', payload);
-        },
-        [callParent]
-    );
+    const executeCommand = async (commandId: string, options?: ExecuteCommandOptions, ...args: unknown[]) => {
+        const payload: PluginViewExecuteCommandPayload = { commandId, args, options };
+        return rpcClient.call('executeCommand', payload);
+    };
 
-    const setActiveView = useCallback(
-        (viewId: string | null): void => {
-            const payload: PluginViewSetActiveViewPayload = { viewId };
-            void callParent('setActiveView', payload);
-        },
-        [callParent]
-    );
+    const setActiveView = (viewId: string | null): void => {
+        const payload: PluginViewSetActiveViewPayload = { viewId };
+        void rpcClient.call('setActiveView', payload);
+    };
 
-    const refreshExternalPlugins = useCallback(async (): Promise<void> => {
-        await callParent('refreshExternalPlugins');
-    }, [callParent]);
+    const refreshExternalPlugins = async (): Promise<void> => {
+        await rpcClient.call('refreshExternalPlugins');
+    };
+
     return {
         ...snapshot,
         executeCommand,
@@ -148,10 +102,7 @@ function useSandboxRuntime() {
 }
 
 /**
- * 插件运行时 Hook 入口：
- * - 主应用环境：直接订阅核心运行时服务。
- * - 视图沙箱环境：通过 postMessage 桥接主线程运行时能力。
- */
+ * 閹绘帊娆㈡潻鎰攽閺?Hook 閸忋儱褰涢敍? * - 娑撹绨查悽銊у箚婢у喛绱伴惄瀛樺复鐠併垽妲勯弽绋跨妇鏉╂劘顢戦弮鑸垫箛閸斅扳偓? * - 鐟欏棗娴樺▽娆戭唸閻滎垰顣ㄩ敍姘垛偓姘崇箖 WindowRpcClient 鐠嬪啰鏁ゆ稉鑽ゅ殠缁嬪绻嶇悰灞炬閼宠棄濮忛妴? */
 export function useCoreRuntime() {
     if (isPluginViewSandbox()) {
         return useSandboxRuntime();

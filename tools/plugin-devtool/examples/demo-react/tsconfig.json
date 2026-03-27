@@ -1,4 +1,4 @@
-﻿{
+{
   "compilerOptions": {
     "target": "ES2020",
     "module": "ESNext",
@@ -8,15 +8,11 @@
     "isolatedModules": true,
     "noEmit": true,
     "jsx": "react-jsx",
+    "lib": ["ES2020", "DOM"],
     "baseUrl": ".",
     "paths": {
-      "@plug-box/plugin-sdk": [
-        "./sdk/index.ts"
-      ]
+      "@plug-box/plugin-sdk": ["./sdk/index.ts"]
     }
   },
-  "include": [
-    "src",
-    "sdk"
-  ]
+  "include": ["src", "sdk"]
 }

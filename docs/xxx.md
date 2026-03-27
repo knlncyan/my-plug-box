@@ -1,4 +1,4 @@
-﻿# 能力注册表最小示例（files）
+# 能力注册表最小示例（files）
 
 本文演示如何在当前项目中注册并使用一个 `files` 能力。
 
@@ -40,11 +40,7 @@ await files.openFolder('E:/knln/Desktop');
 ## 4. 可选：通用调用方式
 
 ```ts
-await api.call('capability.invoke', {
-  capabilityId: 'files',
-  method: 'openFolder',
-  args: ['E:/knln/Desktop'],
-});
+await api.call('files.openFolder', 'E:/knln/Desktop');
 ```
 
 说明：优先使用 `api.get`，可读性和类型提示更好。

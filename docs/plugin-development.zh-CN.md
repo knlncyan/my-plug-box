@@ -1,4 +1,4 @@
-﻿# 插件开发手册（中文）
+# 插件开发手册（中文）
 
 本文档面向本项目插件开发者，覆盖从创建插件到扩展宿主能力的基本流程。
 
@@ -71,7 +71,7 @@ src/plugins/<your-plugin>/
 示例：
 
 ```ts
-import type { BuiltinPluginModule } from '../../domain/protocol/plugin-runtime.protocol';
+import type { BuiltinPluginModule } from '../../domain/protocol/plugin-module.protocol';
 
 const plugin: BuiltinPluginModule = {
   pluginId: 'builtin.my-plugin',

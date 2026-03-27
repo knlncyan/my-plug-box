@@ -1,16 +1,14 @@
-﻿/**
- * 鎻掍欢瑙嗗浘娓叉煋鍣紙鍩轰簬 iframe 娌欑锛夈€? * 1) 姣忎釜瑙嗗浘杩愯鍦ㄧ嫭绔?iframe锛岄伩鍏嶇洿鎺ユ薄鏌撳涓?DOM銆? * 2) 瑙嗗浘閫氳繃 postMessage 璇锋眰涓荤嚎绋?runtime 鑳藉姏銆? */
 import { Component, type ErrorInfo, type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
-import { coreRuntime } from '.';
+import { container, coreRuntime } from '.';
+import { WorkerSandboxService } from './service/WorkerSandboxService';
+import { createWindowRpcServer } from './utils/communicationUtils';
 import { getPluginViewUrl } from './utils/pluginResourceLoader';
 import type { PluginViewManifest } from '../domain/protocol/plugin-catalog.protocol';
 import type {
     PluginViewExecuteCommandPayload,
-    PluginViewRuntimeRequestMessage,
-    PluginViewRuntimeResponseMessage,
-    PluginViewRuntimeSnapshotMessage,
+    PluginViewInvokeHostMethodPayload,
     PluginViewSetActiveViewPayload,
-} from '../domain/protocol/plugin-view-runtime-bridge.protocol';
+} from '../domain/protocol/plugin-view-rpc.protocol';
 
 interface Props {
     view: PluginViewManifest;
@@ -25,6 +23,8 @@ interface ErrorBoundaryProps {
 interface ErrorBoundaryState {
     error: string | null;
 }
+
+const workerSandboxService = container.resolve(WorkerSandboxService);
 
 class PluginViewErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
     state: ErrorBoundaryState = { error: null };
@@ -89,163 +89,97 @@ function PluginSandboxFrame({ view }: Props) {
 
     useEffect(() => {
         let unsubscribeSnapshot: (() => void) | null = null;
+        let unsubscribeSubscriptionPush: (() => void) | null = null;
 
-        function postSnapshot(targetWindow: Window): void {
-            const message: PluginViewRuntimeSnapshotMessage = {
-                type: 'plugin-view-runtime-snapshot',
-                snapshot: coreRuntime.getSnapshot() as unknown as PluginViewRuntimeSnapshotMessage['snapshot'],
-            };
-            targetWindow.postMessage(message, '*');
-        }
+        const getTargetWindow = (): Window | null => iframeRef.current?.contentWindow ?? null;
 
-        function postResponse(
-            targetWindow: Window,
-            response: PluginViewRuntimeResponseMessage
-        ): void {
-            targetWindow.postMessage(response, '*');
-        }
-
-        async function handleRuntimeRequest(
-            targetWindow: Window,
-            message: PluginViewRuntimeRequestMessage
-        ): Promise<void> {
-            try {
-                switch (message.action) {
-                    case 'getSnapshot': {
-                        postResponse(targetWindow, {
-                            type: 'plugin-view-runtime-response',
-                            requestId: message.requestId,
-                            success: true,
-                            result: coreRuntime.getSnapshot(),
-                        });
-                        return;
-                    }
-                    case 'subscribe': {
-                        if (!unsubscribeSnapshot) {
-                            unsubscribeSnapshot = coreRuntime.subscribe(() => {
-                                const current = iframeRef.current?.contentWindow;
-                                if (!current) return;
-                                postSnapshot(current);
-                            });
-                        }
-                        postSnapshot(targetWindow);
-                        postResponse(targetWindow, {
-                            type: 'plugin-view-runtime-response',
-                            requestId: message.requestId,
-                            success: true,
-                            result: null,
-                        });
-                        return;
-                    }
-                    case 'unsubscribe': {
-                        if (unsubscribeSnapshot) {
-                            unsubscribeSnapshot();
-                            unsubscribeSnapshot = null;
-                        }
-                        postResponse(targetWindow, {
-                            type: 'plugin-view-runtime-response',
-                            requestId: message.requestId,
-                            success: true,
-                            result: null,
-                        });
-                        return;
-                    }
-                    case 'executeCommand': {
-                        const payload = asRecord(message.payload) as unknown as PluginViewExecuteCommandPayload;
-                        if (typeof payload.commandId !== 'string' || payload.commandId.length === 0) {
-                            throw new Error('runtime bridge executeCommand missing commandId');
-                        }
-                        const args = Array.isArray(payload.args) ? payload.args : [];
-                        const result = await coreRuntime.executeCommand(
-                            payload.commandId,
-                            payload.options,
-                            ...args
-                        );
-
-                        postResponse(targetWindow, {
-                            type: 'plugin-view-runtime-response',
-                            requestId: message.requestId,
-                            success: true,
-                            result,
-                        });
-                        return;
-                    }
-                    case 'setActiveView': {
-                        const payload = asRecord(message.payload) as unknown as PluginViewSetActiveViewPayload;
-                        if (
-                            payload.viewId !== null &&
-                            payload.viewId !== undefined &&
-                            typeof payload.viewId !== 'string'
-                        ) {
-                            throw new Error('runtime bridge setActiveView invalid viewId');
-                        }
-                        coreRuntime.setActiveView((payload.viewId ?? null) as string | null);
-                        postResponse(targetWindow, {
-                            type: 'plugin-view-runtime-response',
-                            requestId: message.requestId,
-                            success: true,
-                            result: null,
-                        });
-                        return;
-                    }
-                    case 'activateForView': {
-                        const payload = asRecord(message.payload);
-                        const viewId = payload.viewId;
-                        if (typeof viewId !== 'string' || viewId.length === 0) {
-                            throw new Error('runtime bridge activateForView invalid viewId');
-                        }
-                        coreRuntime.setActiveView(viewId);
-                        postResponse(targetWindow, {
-                            type: 'plugin-view-runtime-response',
-                            requestId: message.requestId,
-                            success: true,
-                            result: null,
-                        });
-                        return;
-                    }
-                    case 'refreshExternalPlugins': {
-                        await coreRuntime.refreshExternalPlugins();
-                        postResponse(targetWindow, {
-                            type: 'plugin-view-runtime-response',
-                            requestId: message.requestId,
-                            success: true,
-                            result: null,
-                        });
-                        return;
-                    }
-                    default:
-                        throw new Error(`runtime bridge unsupported action: ${message.action}`);
-                }
-            } catch (error) {
-                postResponse(targetWindow, {
-                    type: 'plugin-view-runtime-response',
-                    requestId: message.requestId,
-                    success: false,
-                    error: error instanceof Error ? error.message : String(error),
-                });
-            }
-        }
-
-        function onWindowMessage(event: MessageEvent<unknown>): void {
-            const targetWindow = iframeRef.current?.contentWindow;
-            if (!targetWindow || event.source !== targetWindow) return;
-
-            const data = event.data as Partial<PluginViewRuntimeRequestMessage>;
-            if (!data || data.type !== 'plugin-view-runtime-request') return;
-            if (typeof data.requestId !== 'string' || typeof data.action !== 'string') return;
-
-            void handleRuntimeRequest(targetWindow, data as PluginViewRuntimeRequestMessage);
-        }
-
-        window.addEventListener('message', onWindowMessage);
-        return () => {
-            window.removeEventListener('message', onWindowMessage);
-            if (unsubscribeSnapshot) {
-                unsubscribeSnapshot();
-                unsubscribeSnapshot = null;
-            }
+        const ensureSnapshotSubscription = (rpcServer: ReturnType<typeof createWindowRpcServer>): void => {
+            if (unsubscribeSnapshot) return;
+            unsubscribeSnapshot = coreRuntime.subscribe(() => {
+                const current = getTargetWindow();
+                if (!current) return;
+                rpcServer.emit('runtime.snapshot', coreRuntime.getSnapshot(), current);
+            });
         };
-    }, [sandboxUrl]);
+
+        const clearSnapshotSubscription = (): void => {
+            if (!unsubscribeSnapshot) return;
+            unsubscribeSnapshot();
+            unsubscribeSnapshot = null;
+        };
+
+        const rpcServer = createWindowRpcServer({
+            channel: 'plugin-view-runtime',
+            sourceWindow: getTargetWindow,
+            targetWindow: getTargetWindow,
+        });
+
+        const unregs = [
+            rpcServer.register('getSnapshot', () => coreRuntime.getSnapshot()),
+            rpcServer.register('subscribe', () => {
+                ensureSnapshotSubscription(rpcServer);
+                return coreRuntime.getSnapshot();
+            }),
+            rpcServer.register('unsubscribe', () => {
+                clearSnapshotSubscription();
+                return null;
+            }),
+            rpcServer.register('executeCommand', (payload) => {
+                const data = asRecord(payload) as unknown as PluginViewExecuteCommandPayload;
+                if (typeof data.commandId !== 'string' || data.commandId.length === 0) {
+                    throw new Error('runtime bridge executeCommand missing commandId');
+                }
+                const args = Array.isArray(data.args) ? data.args : [];
+                return coreRuntime.executeCommand(data.commandId, data.options, ...args);
+            }),
+            rpcServer.register('setActiveView', (payload) => {
+                const data = asRecord(payload) as unknown as PluginViewSetActiveViewPayload;
+                if (data.viewId !== null && data.viewId !== undefined && typeof data.viewId !== 'string') {
+                    throw new Error('runtime bridge setActiveView invalid viewId');
+                }
+                coreRuntime.setActiveView((data.viewId ?? null) as string | null);
+                return null;
+            }),
+            rpcServer.register('refreshExternalPlugins', async () => {
+                await coreRuntime.refreshExternalPlugins();
+                return null;
+            }),
+            rpcServer.register('invokeHostMethod', (payload) => {
+                const data = asRecord(payload) as unknown as PluginViewInvokeHostMethodPayload;
+                if (typeof data.method !== 'string' || data.method.length === 0) {
+                    throw new Error('runtime bridge invokeHostMethod missing method');
+                }
+                return workerSandboxService.invokeHostMethod(view.pluginId, data.method, data.params);
+            }),
+        ];
+
+        unsubscribeSubscriptionPush = workerSandboxService.onSubscriptionPush((push) => {
+            const targetWindow = getTargetWindow();
+            if (!targetWindow) return;
+            if (push.pluginId !== view.pluginId) return;
+
+            rpcServer.emit(
+                'capability.subscription',
+                {
+                    subscriptionId: push.subscriptionId,
+                    data: push.data,
+                },
+                targetWindow
+            );
+        });
+
+        return () => {
+            clearSnapshotSubscription();
+            if (unsubscribeSubscriptionPush) {
+                unsubscribeSubscriptionPush();
+                unsubscribeSubscriptionPush = null;
+            }
+            for (const unreg of unregs) {
+                unreg();
+            }
+            rpcServer.dispose();
+        };
+    }, [sandboxUrl, view.pluginId]);
 
     return (
         <div className="h-full w-full">
@@ -275,4 +209,3 @@ export function PluginViewLoader({ view }: Props) {
         </PluginViewErrorBoundary>
     );
 }
-

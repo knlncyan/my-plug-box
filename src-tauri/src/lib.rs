@@ -1,4 +1,4 @@
-use crate::core::{register_external_manifests, scan_external_plugin_manifests, PluginManager};
+﻿use crate::core::{register_external_manifests, scan_external_plugin_manifests, PluginManager};
 use std::sync::{
     atomic::{AtomicBool, Ordering},
     Mutex,
@@ -67,6 +67,7 @@ pub fn run() {
                 }
             }
         })
+        .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
             commands::refresh_external_plugins,
@@ -75,12 +76,11 @@ pub fn run() {
             commands::activate_plugin,
             commands::deactivate_plugin,
             commands::disable_plugin,
+            commands::sync_global_shortcuts,
             commands::get_all_plugin_settings,
             commands::set_plugin_setting,
             commands::get_plugin_storage_snapshot,
-            commands::set_plugin_storage_value,
-            // 生命周期命令
-            commands::init_settings,
+            commands::set_plugin_storage_value
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

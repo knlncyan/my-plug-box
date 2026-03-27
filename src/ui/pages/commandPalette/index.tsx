@@ -4,7 +4,8 @@ import {
     CommandEmpty,
     CommandItem,
     CommandList,
-    CommandGroup
+    CommandGroup,
+    CommandShortcut
 } from "@/components/ui/command"
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group"
 import { useCoreRuntime } from "@/core"
@@ -78,6 +79,7 @@ export default () => {
                             {items.map(it => (
                                 <CommandItem className="cursor-pointer" key={it.id} onSelect={() => runCommand(it.id)}>
                                     <span>{it.description}</span>
+                                    {it.shortcut && <CommandShortcut>{it.shortcut}</CommandShortcut>}
                                 </CommandItem>
                             ))}
                         </CommandGroup>

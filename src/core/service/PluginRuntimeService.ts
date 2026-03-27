@@ -1,21 +1,25 @@
-import service from '../../api/plugin.service';
+﻿import service from '../../api/plugin.service';
 import type {
     ExecuteCommandOptions,
     ExecuteCommandPipelineOptions,
     PluginRuntimeSnapshot,
 } from '../../domain/runtime';
-import type { PluginSummary } from '../../domain/protocol/plugin-catalog.protocol';
+import type { CommandMeta, PluginSummary } from '../../domain/protocol/plugin-catalog.protocol';
 import { PluginDisposable } from '../PluginDisposable';
 import { PluginAssetCatalogService } from './PluginAssetCatalogService';
+import { CommandKeybindingService } from './CommandKeybindingService';
 import { PluginCommandService } from './PluginCommandService';
 import { WorkerSandboxService } from './WorkerSandboxService';
 
 type Listener = () => void;
 
+type SystemShortcutHandler = () => void | Promise<void>;
+
 interface PluginRuntimeServiceDeps {
     pluginAssetCatalogService: PluginAssetCatalogService;
     pluginCommandService: PluginCommandService;
     workerSandboxService: WorkerSandboxService;
+    commandKeybindingService: CommandKeybindingService;
     pluginDisposable: PluginDisposable;
 }
 
@@ -31,11 +35,6 @@ function isDisabled(plugin: PluginSummary | undefined): boolean {
     return statusOf(plugin) === 'disabled';
 }
 
-/**
- * 插件运行时服务（核心编排层）：
- * 1) 前端只消费后端状态快照，不在前端维护插件状态机。
- * 2) 负责命令调度、视图切换和 Worker 生命周期。
- */
 export class PluginRuntimeService {
     private snapshot: PluginRuntimeSnapshot = {
         loading: false,
@@ -47,21 +46,36 @@ export class PluginRuntimeService {
     };
 
     private readonly listeners = new Set<Listener>();
+    private readonly keybindingChangeDisposer: () => void;
     private initPromise: Promise<void> | null = null;
     private shutdownPromise: Promise<void> | null = null;
     private readonly activatedFrontendWorkerIds = new Set<string>();
+    private commandCatalogRaw: CommandMeta[] = [];
 
     constructor(private readonly deps: PluginRuntimeServiceDeps) {
         this.deps.workerSandboxService.setCommandExecutor(
             (commandId: string, options: ExecuteCommandPipelineOptions, ...args: unknown[]) =>
                 this.executeCommandInternal(commandId, options, ...args)
         );
+
+        this.deps.commandKeybindingService.setCommandExecutor(async (commandId: string) => {
+            await this.executeCommandInternal(commandId, { trace: [] });
+            return null;
+        });
+
         this.deps.workerSandboxService.setViewActivator((viewId: string) => {
             this.setActiveView(viewId);
         });
+
         this.deps.pluginCommandService.setPluginActivator((pluginId, activationEvent) =>
             this.ensurePluginReady(pluginId, activationEvent)
         );
+
+        this.keybindingChangeDisposer = this.deps.commandKeybindingService.onDidChange(() => {
+            this.patch({
+                commands: this.deps.commandKeybindingService.decorateCommands(this.commandCatalogRaw),
+            });
+        });
     }
 
     subscribe = (listener: Listener): (() => void) => {
@@ -79,11 +93,6 @@ export class PluginRuntimeService {
         return this.initPromise;
     };
 
-    /**
-     * 运行中刷新外部插件：
-     * - 后端重新扫描并注册插件。
-     * - 前端重新拉取最新状态快照并同步 Worker。
-     */
     refreshExternalPlugins = async (): Promise<void> => {
         await this.deps.pluginAssetCatalogService.refreshFromBackend();
         await this.refreshAll();
@@ -135,6 +144,18 @@ export class PluginRuntimeService {
         ...args: unknown[]
     ): Promise<unknown> => {
         return this.executeCommandInternal(commandId, { ...options, trace: [] }, ...args);
+    };
+
+    setCommandShortcut = async (commandId: string, shortcut: string | null): Promise<void> => {
+        await this.deps.commandKeybindingService.setUserShortcut(commandId, shortcut);
+    };
+
+    clearCommandShortcut = async (commandId: string): Promise<void> => {
+        await this.deps.commandKeybindingService.clearUserShortcut(commandId);
+    };
+
+    registerSystemShortcut = (shortcut: string, handler: SystemShortcutHandler): (() => void) => {
+        return this.deps.commandKeybindingService.registerSystemShortcut(shortcut, handler);
     };
 
     private async executeCommandInternal(
@@ -220,6 +241,7 @@ export class PluginRuntimeService {
         try {
             await this.deps.pluginAssetCatalogService.validateManifestConsistency();
             await this.deps.pluginAssetCatalogService.registerPlugins();
+            await this.deps.commandKeybindingService.start();
             await this.refreshAll();
             await this.syncFrontendModuleState();
             this.patch({ loading: false, ready: true, error: null });
@@ -237,9 +259,13 @@ export class PluginRuntimeService {
                 // 初始化失败时也继续关闭，避免资源泄漏。
             }
         }
+
         this.activatedFrontendWorkerIds.clear();
+        this.deps.commandKeybindingService.stop();
         this.deps.pluginCommandService.setCommandCatalog([]);
         this.deps.pluginCommandService.setPluginCatalog([]);
+        this.commandCatalogRaw = [];
+        this.keybindingChangeDisposer();
         await this.deps.pluginDisposable.dispose('__global__');
 
         this.patch({
@@ -302,7 +328,11 @@ export class PluginRuntimeService {
     private async refreshAll(): Promise<void> {
         const [pluginsReponse, commandsReponse] = await Promise.all([service.listPlugins(), service.listCommands()]);
         const plugins = pluginsReponse.data ?? [];
-        const commands = commandsReponse.data ?? [];
+        const commandsRaw = commandsReponse.data ?? [];
+
+        this.commandCatalogRaw = commandsRaw;
+        this.deps.commandKeybindingService.setCommandCatalog(commandsRaw);
+        const commands = this.deps.commandKeybindingService.decorateCommands(commandsRaw);
 
         this.deps.pluginCommandService.setPluginCatalog(plugins);
         this.deps.pluginCommandService.setCommandCatalog(commands);

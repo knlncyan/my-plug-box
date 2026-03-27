@@ -1,4 +1,3 @@
-import initService from '@/api/init.service';
 import pluginService from '@/api/plugin.service';
 import { debounce } from 'lodash';
 import { create } from 'zustand';
@@ -33,27 +32,6 @@ const DEFAULT_STATE = {
     plugOrderKey: 'activate' as const,
 };
 
-function toAsideBarKey(value: unknown): AsideBarKeys | undefined {
-    if (value === 'none' || value === 'plugs' || value === 'search' || value === 'tags') {
-        return value;
-    }
-    return undefined;
-}
-
-function toPlugViewMode(value: unknown): PlugViewModes | undefined {
-    if (value === 'list' || value === 'grid-small' || value === 'grid-medium') {
-        return value;
-    }
-    return undefined;
-}
-
-function toPlugOrderKey(value: unknown): PlugOrderKeys | undefined {
-    if (value === 'name' || value === 'activate') {
-        return value;
-    }
-    return undefined;
-}
-
 // 如果你不用 zustand/middleware/persist，可以自己实现 hydrate
 export const useAsideStateStore = create<AsideState>()((set, get) => ({
     ...DEFAULT_STATE,
@@ -68,16 +46,17 @@ export const useAsideStateStore = create<AsideState>()((set, get) => ({
     hydrate: async () => {
         try {
             const saved = (await pluginService.getAllPluginSettings()).data;
-            if (saved) {
+            const asideSetting = saved?.['global.asideSetting'] as Record<string, any>;
+            if (asideSetting) {
                 set({
-                    hiddenAside: saved?.['global.aside.hiddenAside'] == 'true',
-                    hiddenBackend: saved?.['global.aside.hiddenBackend'] == 'true',
+                    hiddenAside: asideSetting?.hiddenAside == 'true',
+                    hiddenBackend: asideSetting?.hiddenBackend == 'true',
                     asideBarKey:
-                        toAsideBarKey(saved?.['global.aside.asideBarKey']) ?? DEFAULT_STATE.asideBarKey,
+                        asideSetting?.asideBarKey ?? DEFAULT_STATE.asideBarKey,
                     plugViewMode:
-                        toPlugViewMode(saved?.['global.aside.plugViewMode']) ?? DEFAULT_STATE.plugViewMode,
+                        asideSetting?.plugViewMode ?? DEFAULT_STATE.plugViewMode,
                     plugOrderKey:
-                        toPlugOrderKey(saved?.['global.aside.plugOrderKey']) ?? DEFAULT_STATE.plugOrderKey,
+                        asideSetting?.plugOrderKey ?? DEFAULT_STATE.plugOrderKey,
                 });
             }
         } catch (e) {
@@ -88,15 +67,15 @@ export const useAsideStateStore = create<AsideState>()((set, get) => ({
     persist: async () => {
         try {
             const state = get();
-            const settingsToSave = [
-                { key: 'global.aside.hiddenAside', value: String(state.hiddenAside) },
-                { key: 'global.aside.hiddenBackend', value: String(state.hiddenBackend) },
-                { key: 'global.aside.asideBarKey', value: state.asideBarKey },
-                { key: 'global.aside.plugViewMode', value: state.plugViewMode },
-                { key: 'global.aside.plugOrderKey', value: state.plugOrderKey },
-            ];
+            const settingsToSave = {
+                hiddenAside: String(state.hiddenAside),
+                hiddenBackend: String(state.hiddenBackend),
+                asideBarKey: String(state.asideBarKey),
+                plugViewMode: String(state.plugViewMode),
+                plugOrderKey: String(state.plugOrderKey),
+            }
 
-            await initService.initSettings(settingsToSave);
+            await pluginService.setPluginSetting("global", "asideSetting", settingsToSave);
             console.log('Aside state persisted successfully');
         } catch (e) {
             console.warn('Failed to persist aside state', e);

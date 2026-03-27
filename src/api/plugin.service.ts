@@ -8,6 +8,7 @@ import type {
     PluginManifest,
     PluginSummary,
 } from '../domain/protocol/plugin-catalog.protocol';
+import type { GlobalShortcutSyncResult } from '../domain/protocol/global-shortcut.protocol';
 
 class PluginService {
     /**
@@ -34,7 +35,11 @@ class PluginService {
     }
 
     async listCommands(): Promise<ApiResponse<CommandMeta[]>> {
-        return api.invokeApi<CommandMeta[]>('get_registered_commands');
+        return await api.invokeApi<CommandMeta[]>('get_registered_commands');
+    }
+
+    async syncGlobalShortcuts(bindings: Record<string, string>): Promise<ApiResponse<GlobalShortcutSyncResult>> {
+        return await api.invokeApi<GlobalShortcutSyncResult>('sync_global_shortcuts', { bindings });
     }
 
     async getAllPluginSettings(): Promise<ApiResponse<Record<string, unknown>>> {

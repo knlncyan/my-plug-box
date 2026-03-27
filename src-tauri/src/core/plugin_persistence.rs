@@ -6,8 +6,6 @@ use serde_json::{Map, Value};
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use crate::core::SettingsDTO;
-
 /// 读取整个settings。
 pub fn read_all_plugin_settings() -> Result<Map<String, Value>, String> {
     let path = settings_file_path()?;
@@ -21,16 +19,6 @@ pub fn write_plugin_setting(plugin_id: &str, key: &str, value: Value) -> Result<
     let mut data = read_json_object(&path)?;
     data.insert(scoped_key, value);
     write_json_object(&path, &data)
-}
-
-/// 写入多个 settings 项。
-pub fn write_settings(data: Vec<SettingsDTO>) -> Result<(), String> {
-    let path = settings_file_path()?;
-    let mut file = read_json_object(&path)?;
-    for it in data.into_iter() {
-        file.insert(it.key, it.value);
-    }
-    write_json_object(&path, &file)
 }
 
 /// 读取某个插件 storage 快照。

@@ -1,7 +1,7 @@
 /**
  * 插件目录与后端接口协议（统一定义）：
  * 1) 统一后端响应包络类型。
- * 2) 统一插件列表/命令/插件清单结构。
+ * 2) 统一插件列表、命令、插件清单结构。
  */
 export type ApiCode = 'SUCCESS' | 'WARNING' | 'ERROR';
 
@@ -21,6 +21,8 @@ export type PluginStatus =
     | 'disabled'
     | 'error';
 
+export type ShortcutScope = 'local' | 'global';
+
 export interface PluginViewManifest {
     id: string;
     title: string;
@@ -32,6 +34,8 @@ export interface CommandMeta {
     id: string;
     description: string;
     pluginId: string;
+    shortcut?: string;
+    shortcutScope?: ShortcutScope;
 }
 
 export interface PluginSummary {
@@ -48,6 +52,8 @@ export interface PluginSummary {
 export interface PluginCommandManifest {
     id: string;
     description: string;
+    shortcut?: string;
+    shortcutScope?: ShortcutScope;
 }
 
 export interface PluginManifest {

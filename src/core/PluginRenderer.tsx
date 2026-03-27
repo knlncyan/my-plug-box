@@ -1,11 +1,13 @@
-import { Component, type ErrorInfo, type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
+﻿import { Component, type ErrorInfo, type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { container, coreRuntime } from '.';
+import { CommandKeybindingService } from './service/CommandKeybindingService';
 import { WorkerSandboxService } from './service/WorkerSandboxService';
 import { createWindowRpcServer } from './utils/communicationUtils';
 import { getPluginViewUrl } from './utils/pluginResourceLoader';
 import type { PluginViewManifest } from '../domain/protocol/plugin-catalog.protocol';
 import type {
     PluginViewInvokeHostMethodPayload,
+    PluginViewLocalShortcutKeydownPayload,
 } from '../domain/protocol/plugin-view-rpc.protocol';
 
 interface Props {
@@ -23,6 +25,7 @@ interface ErrorBoundaryState {
 }
 
 const workerSandboxService = container.resolve(WorkerSandboxService);
+const commandKeybindingService = container.resolve(CommandKeybindingService);
 
 class PluginViewErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
     state: ErrorBoundaryState = { error: null };
@@ -60,6 +63,25 @@ class PluginViewErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundar
 function asRecord(value: unknown): Record<string, unknown> {
     if (!value || typeof value !== 'object') return {};
     return value as Record<string, unknown>;
+}
+
+function asLocalShortcutPayload(value: unknown): PluginViewLocalShortcutKeydownPayload | null {
+    const data = asRecord(value);
+    if (typeof data.code !== 'string') return null;
+
+    const toBool = (key: string): boolean => data[key] === true;
+
+    return {
+        code: data.code,
+        ctrlKey: toBool('ctrlKey'),
+        altKey: toBool('altKey'),
+        shiftKey: toBool('shiftKey'),
+        metaKey: toBool('metaKey'),
+        repeat: toBool('repeat'),
+        isComposing: toBool('isComposing'),
+        defaultPrevented: toBool('defaultPrevented'),
+        targetIsEditable: toBool('targetIsEditable'),
+    };
 }
 
 function buildSandboxViewUrl(view: PluginViewManifest): string {
@@ -107,6 +129,13 @@ function PluginSandboxFrame({ view }: Props) {
                     throw new Error('runtime bridge invokeHostMethod missing method');
                 }
                 return workerSandboxService.invokeHostMethod(view.pluginId, data.method, data.params);
+            }),
+            rpcServer.register('handleLocalShortcutKeydown', (payload) => {
+                const keydownPayload = asLocalShortcutPayload(payload);
+                if (!keydownPayload) {
+                    return false;
+                }
+                return commandKeybindingService.handleLocalShortcutKeydown(keydownPayload);
             }),
         ];
 
@@ -165,3 +194,4 @@ export function PluginViewLoader({ view }: Props) {
         </PluginViewErrorBoundary>
     );
 }
+

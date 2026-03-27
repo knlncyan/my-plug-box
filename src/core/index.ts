@@ -5,6 +5,7 @@ import { PluginRuntimeService } from './service/PluginRuntimeService';
 import { PluginSettingService } from './service/PluginSettingService';
 import { PluginStorageService } from './service/PluginStorageService';
 import { WorkerSandboxService } from './service/WorkerSandboxService';
+import { CommandKeybindingService } from './service/CommandKeybindingService';
 import type { CapabilityById, CapabilityFactory } from '../domain/capability';
 import { CapabilityRegistry } from './CapabilityRegistry';
 import { PluginDisposable } from './PluginDisposable';
@@ -26,6 +27,13 @@ container.registerSingleton(
     () => new PluginSettingService(container.resolve(PluginEventBus))
 );
 container.registerSingleton(PluginStorageService, () => new PluginStorageService());
+container.registerSingleton(
+    CommandKeybindingService,
+    () =>
+        new CommandKeybindingService({
+            pluginSettingService: container.resolve(PluginSettingService),
+        })
+);
 
 container.registerSingleton(
     WorkerSandboxService,
@@ -55,6 +63,7 @@ container.registerSingleton(
             pluginAssetCatalogService: container.resolve(PluginAssetCatalogService),
             pluginCommandService: container.resolve(PluginCommandService),
             workerSandboxService: container.resolve(WorkerSandboxService),
+            commandKeybindingService: container.resolve(CommandKeybindingService),
             pluginDisposable: container.resolve(PluginDisposable),
         })
 );

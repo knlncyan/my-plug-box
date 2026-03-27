@@ -1,4 +1,7 @@
-use crate::core::{CommandMeta, JsPluginAdapter, PluginManager, PluginManagerActivation, PluginManifest, PluginViewManifest};
+use crate::core::{
+    CommandMeta, JsPluginAdapter, PluginManager, PluginManagerActivation, PluginManifest,
+    PluginViewManifest,
+};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::fs;
@@ -18,6 +21,10 @@ pub struct ExternalPluginViewManifestDto {
 pub struct ExternalPluginCommandDto {
     pub id: String,
     pub description: String,
+    #[serde(default)]
+    pub shortcut: Option<String>,
+    #[serde(default, rename = "shortcutScope")]
+    pub shortcut_scope: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -39,8 +46,8 @@ pub struct ExternalPluginManifestDto {
 }
 
 fn resolve_external_plugins_root() -> Result<PathBuf, String> {
-    let cwd = std::env::current_dir()
-        .map_err(|error| format!("failed to resolve current dir: {}", error))?;
+    let cwd =
+        std::env::current_dir().map_err(|error| format!("failed to resolve current dir: {}", error))?;
 
     let candidates = vec![
         cwd.join("plugins"),
@@ -66,7 +73,7 @@ fn read_manifest_file(path: &Path) -> Result<ExternalPluginManifestDto, String> 
     let raw = fs::read_to_string(path)
         .map_err(|error| format!("failed to read {}: {}", path.display(), error))?;
 
-    // 兼容 UTF-8 BOM 文件头，避免 Windows 编辑器保存后解析失败。
+    // 兼容 UTF-8 BOM，避免 plugin.json 在 Windows 编辑器下保存后解析失败。
     let normalized = raw.trim_start_matches('\u{feff}');
 
     serde_json::from_str::<ExternalPluginManifestDto>(normalized)
@@ -102,8 +109,8 @@ pub fn scan_external_plugin_manifests() -> Result<Vec<ExternalPluginManifestDto>
 
     let mut manifests = Vec::new();
 
-    let entries = fs::read_dir(&root)
-        .map_err(|error| format!("failed to read plugin root {}: {}", root.display(), error))?;
+    let entries =
+        fs::read_dir(&root).map_err(|error| format!("failed to read plugin root {}: {}", root.display(), error))?;
 
     for entry in entries {
         let entry =
@@ -159,14 +166,14 @@ pub fn register_external_manifests(
     for manifest in manifests {
         let plugin_id = manifest.id.clone();
         if manager.contains_plugin(&plugin_id) {
-            // 仅新增未注册插件，不改变已管理插件的状态。
+            // 仅新增未注册插件，不改变已管理插件状态。
             continue;
         }
 
         let core_manifest = to_core_manifest(manifest);
         let module = JsPluginAdapter::new(plugin_id.clone());
 
-        // 重复注册会返回 warning，这里忽略 warning，保持幂等。
+        // 重复注册返回 warning，这里按幂等处理。
         let _ = manager.register_builtin(core_manifest, module)?;
 
         for command in &manifest.commands {
@@ -174,6 +181,8 @@ pub fn register_external_manifests(
                 id: command.id.clone(),
                 description: command.description.clone(),
                 plugin_id: plugin_id.clone(),
+                shortcut: command.shortcut.clone(),
+                shortcut_scope: command.shortcut_scope.clone(),
             })?;
         }
     }

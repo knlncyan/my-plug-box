@@ -1,6 +1,6 @@
-import { useCoreRuntime } from "@/core";
+﻿import { useCoreRuntime } from "@/core";
 import { Activity, Boxes, Ellipsis, LayoutGrid, PanelLeftClose, PanelLeftOpen, Search, Settings2, Tags, X } from "lucide-react";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
 import { Item, ItemContent, ItemDescription, ItemGroup, ItemMedia, ItemTitle } from "@/components/ui/item";
 import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuPortal, DropdownMenuSeparator, DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -9,9 +9,10 @@ import { AsideBarKeys, useAsideStateStore } from "@/store/asideStateStore";
 import { useCommandPaletteDialog } from "../pages/commandPalette";
 import PluginManager from "../pages/pluginManager";
 import { MyTooltip } from "@/components/MyTooltip";
+import KeyboardShortcutsPage from "../pages/keyboardShortcuts";
 
 export default () => {
-    const { plugins, activeViewPluginId, setActiveView } = useCoreRuntime();
+    const { plugins, activeViewPluginId, setActiveView, registerSystemShortcut } = useCoreRuntime();
     // 侧边栏隐藏
     const hiddenAside = useAsideStateStore(it => it.hiddenAside);
     const toggleAside = useAsideStateStore(it => it.toggleAside);
@@ -28,6 +29,11 @@ export default () => {
     const [search, setSearch] = useState<string>('');
     const setMainViewContent = useAppViewStore(state => state.setMainViewContent);
 
+    useEffect(() => {
+        return registerSystemShortcut('Ctrl+Shift+P', () => {
+            useCommandPaletteDialog.show();
+        });
+    }, [registerSystemShortcut]);
     const selectViewPlugin = useCallback(
         (viewId: string) => {
             setActiveView(viewId);
@@ -148,7 +154,7 @@ export default () => {
                                                     </ItemTitle>
                                                     <ItemDescription className={`line-clamp-1 ${activeViewPluginId == plugin.id && 'text-neutral-300'}`}>{plugin.description}</ItemDescription>
                                                 </ItemContent>
-                                                {/* 增加一个表示状态的小圆点 */}
+                                                {/* 增加一个表示状态的小圆点*/}
                                                 <div className="absolute bottom-2 right-2 w-1.5 h-1.5 rounded-full bg-green-500" />
                                             </div>
                                         </Item>
@@ -344,7 +350,7 @@ const SettingCenter = () => {
                 <DropdownMenuItem className="cursor-pointer" onSelect={() => setMainViewContent(<PluginManager />)}>
                     Plug Manager
                 </DropdownMenuItem>
-                <DropdownMenuItem className="cursor-pointer">
+                <DropdownMenuItem className="cursor-pointer" onSelect={() => setMainViewContent(<KeyboardShortcutsPage />)}>
                     Keyboard Shortcuts
                 </DropdownMenuItem>
                 <DropdownMenuItem className="cursor-pointer">

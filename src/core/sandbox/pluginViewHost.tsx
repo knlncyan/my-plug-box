@@ -1,4 +1,4 @@
-import * as React from 'react';
+﻿import * as React from 'react';
 import { Component, type ComponentType, type ErrorInfo, type ReactNode, useEffect, useState } from 'react';
 import ReactDOM from 'react-dom/client';
 import '../../index.css';
@@ -9,6 +9,7 @@ import type {
     SettingsCapability,
 } from '../../domain/api';
 import type { CapabilityById, CapabilityContract } from '../../domain/capability';
+import type { PluginViewLocalShortcutKeydownPayload } from '../../domain/protocol/plugin-view-rpc.protocol';
 import { createWindowRpcClient } from '../utils/communicationUtils';
 
 declare global {
@@ -81,6 +82,14 @@ function parseParams(): SandboxParams {
 function asRecord(value: unknown): Record<string, unknown> {
     if (!value || typeof value !== 'object') return {};
     return value as Record<string, unknown>;
+}
+
+function isEditableTarget(target: EventTarget | null): boolean {
+    if (!(target instanceof HTMLElement)) return false;
+    if (target.isContentEditable) return true;
+
+    const tag = target.tagName.toLowerCase();
+    return tag === 'input' || tag === 'textarea' || tag === 'select';
 }
 
 const importByUrl = new Function('url', 'return import(url);') as (url: string) => Promise<{ default?: unknown }>;
@@ -206,6 +215,32 @@ function createSandboxPluginApi(params: SandboxParams): PluginHostAPI {
         return proxy;
     }
 
+    const onWindowKeydown = (event: KeyboardEvent): void => {
+        const payload: PluginViewLocalShortcutKeydownPayload = {
+            code: event.code,
+            ctrlKey: event.ctrlKey,
+            altKey: event.altKey,
+            shiftKey: event.shiftKey,
+            metaKey: event.metaKey,
+            repeat: event.repeat,
+            isComposing: event.isComposing,
+            defaultPrevented: event.defaultPrevented,
+            targetIsEditable: isEditableTarget(event.target),
+        };
+
+        void rpcClient
+            .call<boolean>('handleLocalShortcutKeydown', payload, 2_000)
+            .then((handled) => {
+                if (!handled) return;
+                event.preventDefault();
+                event.stopPropagation();
+            })
+            .catch(() => {
+                // Ignore rpc errors while iframe/host reconnects.
+            });
+    };
+
+    window.addEventListener('keydown', onWindowKeydown, true);
     const localCapabilityFactories: Record<string, () => CapabilityContract> = {
         settings: () => {
             const settings: SettingsCapability = {
@@ -271,6 +306,7 @@ function createSandboxPluginApi(params: SandboxParams): PluginHostAPI {
         'beforeunload',
         () => {
             disposeSubscriptionListener();
+            window.removeEventListener('keydown', onWindowKeydown, true);
 
             for (const subscriptionId of settingSubscriptionByKey.values()) {
                 void call('settings.unsubscribe', subscriptionId);

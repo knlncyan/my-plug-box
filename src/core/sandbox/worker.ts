@@ -20,7 +20,6 @@ interface InvokeHostMethodPayload {
 declare global {
     interface WorkerGlobalScope {
         __PLUG_BOX_API_FACTORY__?: () => Promise<PluginHostAPI>;
-        __PLUG_BOX_API__?: PluginHostAPI;
     }
 }
 
@@ -254,7 +253,6 @@ const hostApi: PluginHostAPI = {
 
 const workerScope = self as unknown as WorkerGlobalScope;
 workerScope.__PLUG_BOX_API_FACTORY__ = async () => hostApi;
-workerScope.__PLUG_BOX_API__ = hostApi;
 
 async function executeCommand(commandId: string, args: unknown[], trace: string[]): Promise<unknown> {
     const module = await ensurePluginModule();

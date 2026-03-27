@@ -242,7 +242,6 @@ export interface PluginModule {
 
 type GlobalWithApiFactory = typeof globalThis & {
   __PLUG_BOX_API_FACTORY__?: () => Promise<PluginHostAPI>;
-  __PLUG_BOX_API__?: PluginHostAPI;
 };
 
 function isValidApi(value: unknown): value is PluginHostAPI {
@@ -269,10 +268,6 @@ export async function createPluginApi(seedApi?: unknown): Promise<PluginHostAPI>
     if (typeof globalScope.__PLUG_BOX_API_FACTORY__ === 'function') {
       const api = await globalScope.__PLUG_BOX_API_FACTORY__();
       if (isValidApi(api)) return api;
-    }
-
-    if (isValidApi(globalScope.__PLUG_BOX_API__)) {
-      return globalScope.__PLUG_BOX_API__;
     }
 
     throw new Error('[plugin-sdk] Plugin API factory is not available in current runtime');

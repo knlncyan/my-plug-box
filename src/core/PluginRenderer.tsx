@@ -5,9 +5,7 @@ import { createWindowRpcServer } from './utils/communicationUtils';
 import { getPluginViewUrl } from './utils/pluginResourceLoader';
 import type { PluginViewManifest } from '../domain/protocol/plugin-catalog.protocol';
 import type {
-    PluginViewExecuteCommandPayload,
     PluginViewInvokeHostMethodPayload,
-    PluginViewSetActiveViewPayload,
 } from '../domain/protocol/plugin-view-rpc.protocol';
 
 interface Props {
@@ -88,25 +86,9 @@ function PluginSandboxFrame({ view }: Props) {
     );
 
     useEffect(() => {
-        let unsubscribeSnapshot: (() => void) | null = null;
         let unsubscribeSubscriptionPush: (() => void) | null = null;
 
         const getTargetWindow = (): Window | null => iframeRef.current?.contentWindow ?? null;
-
-        const ensureSnapshotSubscription = (rpcServer: ReturnType<typeof createWindowRpcServer>): void => {
-            if (unsubscribeSnapshot) return;
-            unsubscribeSnapshot = coreRuntime.subscribe(() => {
-                const current = getTargetWindow();
-                if (!current) return;
-                rpcServer.emit('runtime.snapshot', coreRuntime.getSnapshot(), current);
-            });
-        };
-
-        const clearSnapshotSubscription = (): void => {
-            if (!unsubscribeSnapshot) return;
-            unsubscribeSnapshot();
-            unsubscribeSnapshot = null;
-        };
 
         const rpcServer = createWindowRpcServer({
             channel: 'plugin-view-runtime',
@@ -115,31 +97,6 @@ function PluginSandboxFrame({ view }: Props) {
         });
 
         const unregs = [
-            rpcServer.register('getSnapshot', () => coreRuntime.getSnapshot()),
-            rpcServer.register('subscribe', () => {
-                ensureSnapshotSubscription(rpcServer);
-                return coreRuntime.getSnapshot();
-            }),
-            rpcServer.register('unsubscribe', () => {
-                clearSnapshotSubscription();
-                return null;
-            }),
-            rpcServer.register('executeCommand', (payload) => {
-                const data = asRecord(payload) as unknown as PluginViewExecuteCommandPayload;
-                if (typeof data.commandId !== 'string' || data.commandId.length === 0) {
-                    throw new Error('runtime bridge executeCommand missing commandId');
-                }
-                const args = Array.isArray(data.args) ? data.args : [];
-                return coreRuntime.executeCommand(data.commandId, data.options, ...args);
-            }),
-            rpcServer.register('setActiveView', (payload) => {
-                const data = asRecord(payload) as unknown as PluginViewSetActiveViewPayload;
-                if (data.viewId !== null && data.viewId !== undefined && typeof data.viewId !== 'string') {
-                    throw new Error('runtime bridge setActiveView invalid viewId');
-                }
-                coreRuntime.setActiveView((data.viewId ?? null) as string | null);
-                return null;
-            }),
             rpcServer.register('refreshExternalPlugins', async () => {
                 await coreRuntime.refreshExternalPlugins();
                 return null;
@@ -169,7 +126,6 @@ function PluginSandboxFrame({ view }: Props) {
         });
 
         return () => {
-            clearSnapshotSubscription();
             if (unsubscribeSubscriptionPush) {
                 unsubscribeSubscriptionPush();
                 unsubscribeSubscriptionPush = null;

@@ -13,9 +13,7 @@ import { createWindowRpcClient } from '../utils/communicationUtils';
 
 declare global {
     interface Window {
-        __PLUGIN_VIEW_SANDBOX__?: boolean;
         React?: typeof React;
-        __PLUG_BOX_API__?: PluginHostAPI;
         __PLUG_BOX_API_FACTORY__?: () => Promise<PluginHostAPI>;
     }
 }
@@ -365,12 +363,9 @@ function App() {
 
 function bootstrap(): void {
     const params = parseParams();
-
-    window.__PLUGIN_VIEW_SANDBOX__ = true;
     window.React = React;
 
     const pluginApi = createSandboxPluginApi(params);
-    window.__PLUG_BOX_API__ = pluginApi;
     window.__PLUG_BOX_API_FACTORY__ = async () => pluginApi;
 
     const root = document.getElementById('root');

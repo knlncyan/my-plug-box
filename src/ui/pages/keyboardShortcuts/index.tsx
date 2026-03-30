@@ -97,14 +97,15 @@ function normalizeShortcutFromEvent(event: ReactKeyboardEvent<HTMLInputElement>)
 }
 
 export default function KeyboardShortcutsPage() {
-    const { commands, setCommandShortcut, clearCommandShortcut } = useCoreRuntime();
+    const { plugins } = useCoreRuntime();
     const [query, setQuery] = useState('');
     const [draftMap, setDraftMap] = useState<Record<string, string>>({});
     const [savingMap, setSavingMap] = useState<Record<string, boolean>>({});
 
     const filteredCommands = useMemo(() => {
         const keyword = query.trim().toLowerCase();
-        const list = [...commands].sort((a, b) => a.id.localeCompare(b.id));
+        const commands = plugins.flatMap(it => it.commandsMeta);
+        const list = commands.sort((a, b) => a.id.localeCompare(b.id));
         if (!keyword) return list;
 
         return list.filter((item) => {
@@ -114,7 +115,7 @@ export default function KeyboardShortcutsPage() {
                 item.pluginId.toLowerCase().includes(keyword)
             );
         });
-    }, [commands, query]);
+    }, [plugins, query]);
 
     function getDraftValue(commandId: string, fallback?: string): string {
         if (Object.prototype.hasOwnProperty.call(draftMap, commandId)) {
@@ -136,7 +137,7 @@ export default function KeyboardShortcutsPage() {
 
         try {
             if (!raw) {
-                await clearCommandShortcut(commandId);
+                // await clearCommandShortcut(commandId);
                 setDraftMap((prev) => {
                     const next = { ...prev };
                     delete next[commandId];
@@ -146,7 +147,7 @@ export default function KeyboardShortcutsPage() {
                 return;
             }
 
-            await setCommandShortcut(commandId, raw);
+            // await setCommandShortcut(commandId, raw);
             setDraftMap((prev) => ({ ...prev, [commandId]: raw }));
             toast.success(`Shortcut saved: ${commandId}`);
         } catch (error) {
@@ -160,7 +161,7 @@ export default function KeyboardShortcutsPage() {
         setSavingMap((prev) => ({ ...prev, [commandId]: true }));
 
         try {
-            await clearCommandShortcut(commandId);
+            // await clearCommandShortcut(commandId);
             setDraftMap((prev) => {
                 const next = { ...prev };
                 delete next[commandId];

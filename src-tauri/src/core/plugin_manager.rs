@@ -1,25 +1,20 @@
-use std::collections::HashMap;
+﻿use std::collections::HashMap;
 
 use crate::core::{
-    ApiResponse, CommandMeta, PluginActivation, PluginContext, PluginEntry, PluginManifest,
-    PluginStatus, PluginSummary,
+    ApiResponse, CommandMeta, ExternalPluginManifestDto, PluginEntry, PluginManifest, PluginStatus,
+    ViewMeta,
 };
 
 pub trait PluginManagerActivation {
-    fn register_builtin<T: PluginActivation + Send + 'static>(
-        &mut self,
-        manifest: PluginManifest,
-        module: T,
-    ) -> Result<ApiResponse<()>, String>;
-    fn register_command(&mut self, cmd: CommandMeta) -> Result<ApiResponse<()>, String>;
-    fn activate_by_id(&mut self, plugin_id: &str) -> Result<ApiResponse<()>, String>;
-    fn deactivate(&mut self, plugin_id: &str) -> Result<ApiResponse<()>, String>;
-    fn disable(&mut self, plugin_id: &str) -> Result<ApiResponse<()>, String>;
+    fn register(&mut self, plugin_dtos: Vec<ExternalPluginManifestDto>) -> Result<(), String>;
+    fn activate(&mut self, plugin_id: &str) -> ApiResponse<()>;
+    fn deactivate(&mut self, plugin_id: &str) -> ApiResponse<()>;
+    fn disable(&mut self, plugin_id: &str) -> ApiResponse<()>;
 }
 
 pub struct PluginManager {
     _plugins: HashMap<String, PluginEntry>,
-    _contexts: HashMap<String, PluginContext>,
+    // _contexts: HashMap<String, PluginContext>,
     _global_views: HashMap<String, String>,
     _global_commands: HashMap<String, String>,
 }
@@ -28,7 +23,7 @@ impl PluginManager {
     pub fn new() -> Self {
         PluginManager {
             _plugins: HashMap::new(),
-            _contexts: HashMap::new(),
+            // _contexts: HashMap::new(),
             _global_views: HashMap::new(),
             _global_commands: HashMap::new(),
         }
@@ -57,199 +52,137 @@ impl PluginManager {
         }
     }
 
-    fn activate_single(
-        entry: &mut PluginEntry,
-        contexts: &mut HashMap<String, PluginContext>,
-    ) -> Result<ApiResponse<()>, String> {
+    fn activate_single(entry: &mut PluginEntry) -> Result<(), String> {
         if entry.status == PluginStatus::Disabled {
-            return Ok(ApiResponse::warning(format!(
-                "plugin {} is disabled",
-                entry.manifest.id
-            )));
+            return Err(format!("plugin {} is disabled", entry.manifest.id));
         }
 
         if entry.status == PluginStatus::Activated {
-            return Ok(ApiResponse::warning(format!(
-                "plugin {} is already activated",
-                entry.manifest.id
-            )));
+            return Ok(());
         }
 
-        let id = entry.manifest.id.clone();
-        let module = entry.module.as_ref();
+        entry.status = PluginStatus::Activated;
 
-        entry.status = PluginStatus::Activating;
-
-        let context = PluginContext {
-            plugin_id: id.clone(),
-        };
-
-        match module.activate(&context) {
-            Ok(_) => {
-                entry.status = PluginStatus::Activated;
-                contexts.insert(id.clone(), context);
-                Ok(ApiResponse::ok())
-            }
-            Err(e) => {
-                entry.status = PluginStatus::Error(e.clone());
-                Err(e)
-            }
-        }
+        Ok(())
     }
 
-    pub fn list_plugins(&self) -> Vec<PluginSummary> {
-        self._plugins
-            .iter()
-            .map(|(id, entry)| {
-                PluginSummary {
-                    id: id.clone(),
-                    name: entry.manifest.name.clone(),
-                    version: entry.manifest.version.clone(),
-                    status: Self::status_label(&entry.status).to_string(),
-                    icon: entry.manifest.icon.clone(),
-                    error: Self::status_error(&entry.status),
-                    description: entry.manifest.description.clone(),
-                    view: entry.manifest.view.clone(),
-                }
-            })
-            .collect()
-    }
-
-    pub fn get_all_commands(&self) -> Vec<CommandMeta> {
-        self._plugins
-            .values()
-            .flat_map(|entry| entry.registered_commands.clone())
-            .collect()
+    pub fn list_plugins_runtime(&self) -> Vec<PluginEntry> {
+        self._plugins.values().cloned().collect()
     }
 }
 
 impl PluginManagerActivation for PluginManager {
-    fn register_builtin<T: PluginActivation + Send + 'static>(
-        &mut self,
-        manifest: PluginManifest,
-        module: T,
-    ) -> Result<ApiResponse<()>, String> {
-        if self._plugins.contains_key(&manifest.id) {
-            return Ok(ApiResponse::warning(format!(
-                "plugin {} already exists",
-                manifest.id
-            )));
-        }
+    // 注意：这里去掉了 Vec 的引用，直接消费它
+    fn register(&mut self, plugin_dtos: Vec<ExternalPluginManifestDto>) -> Result<(), String> {
+        for dto in plugin_dtos {
+            // 如果已存在，跳过
+            // if self._plugins.contains_key(&dto.id) {
+            //     continue;
+            // }
 
-        let entry = PluginEntry {
-            manifest: manifest.clone(),
-            status: PluginStatus::Registered,
-            module: Box::new(module),
-            registered_commands: Vec::new(),
-        };
-
-        self._plugins.insert(manifest.id.clone(), entry);
-
-        Ok(ApiResponse::success(
-            (),
-            format!("plugin {} registered", manifest.id),
-        ))
-    }
-
-    fn register_command(&mut self, cmd: CommandMeta) -> Result<ApiResponse<()>, String> {
-        let plugin_id = cmd.plugin_id.clone();
-        let command_id = cmd.id.clone();
-
-        if !self._plugins.contains_key(&plugin_id) {
-            return Err(format!(
-                "plugin {} not found, cannot register command",
-                plugin_id
-            ));
-        }
-
-        if let Some(owner_plugin_id) = self._global_commands.get(&command_id) {
-            if owner_plugin_id != &plugin_id {
-                return Ok(ApiResponse::warning(format!(
-                    "command id {} already belongs to plugin {}",
-                    command_id, owner_plugin_id
-                )));
+            if !dto.module_url.as_ref().is_some_and(|s| !s.is_empty()) {
+                println!("插件 '{}' 缺少必需的 module_url", dto.id);
+                continue;
             }
-            return Ok(ApiResponse::warning(format!(
-                "command id {} already registered in plugin {}",
-                command_id, plugin_id
-            )));
+            if dto.view.as_ref().is_some() && dto.view_url.as_ref().is_none_or(|s| s.is_empty()) {
+                println!("插件 '{}' 缺少必需的 view_url", dto.id);
+                continue;
+            }
+            let module_url = dto.module_url.unwrap();
+            let view_url = dto.view_url.unwrap();
+
+            let plugin_id = dto.id.clone(); // 这里还是需要 clone 一次作为 key
+
+            // 直接移动字段，不需要 clone
+            let view_meta = dto.view.map(|it| ViewMeta {
+                id: it.id,
+                title: it.title,
+                plugin_id: plugin_id.clone(),
+                view_url: view_url,
+                props: it.props,
+            });
+
+            let commands_meta = dto
+                .commands
+                .into_iter()
+                .map(|it| CommandMeta {
+                    id: it.id,
+                    description: it.description,
+                    plugin_id: plugin_id.clone(),
+                    shortcut: it.shortcut,
+                    shortcut_scope: it.shortcut_scope,
+                })
+                .collect();
+
+            let entry = PluginEntry {
+                plugin_id: plugin_id.clone(),
+                manifest: PluginManifest {
+                    id: plugin_id.clone(),
+                    name: dto.name,
+                    version: dto.version,
+                    icon: dto.icon,
+                    description: dto.description,
+                    activation_events: dto.activation_events,
+                },
+                view_meta,
+                commands_meta,
+                status: PluginStatus::Registered,
+                module_url: module_url,
+            };
+
+            self._plugins.insert(plugin_id, entry);
         }
-
-        let entry = self
-            ._plugins
-            .get_mut(&plugin_id)
-            .ok_or_else(|| format!("plugin {} not found", plugin_id))?;
-
-        if entry.registered_commands.iter().any(|c| c.id == command_id) {
-            return Ok(ApiResponse::warning(format!(
-                "command id {} already registered in plugin {}",
-                command_id, plugin_id
-            )));
-        }
-
-        entry.registered_commands.push(cmd);
-        self._global_commands.insert(command_id, plugin_id);
-
-        Ok(ApiResponse::ok())
+        Ok(())
     }
 
-    fn activate_by_id(&mut self, plugin_id: &str) -> Result<ApiResponse<()>, String> {
-        let entry = self
-            ._plugins
-            .get_mut(plugin_id)
-            .ok_or_else(|| format!("plugin {} not found", plugin_id))?;
+    fn activate(&mut self, plugin_id: &str) -> ApiResponse<()> {
+        // 1. 先获取 Option
+        let entry = self._plugins.get_mut(plugin_id);
 
-        Self::activate_single(entry, &mut self._contexts)
+        // 2. 手动匹配
+        if let Some(e) = entry {
+            match Self::activate_single(e) {
+                Ok(_) => ApiResponse::ok(),
+                Err(error) => ApiResponse::error(error),
+            }
+        } else {
+            ApiResponse::error(format!("plugin {} not found", plugin_id))
+        }
     }
 
-    fn deactivate(&mut self, plugin_id: &str) -> Result<ApiResponse<()>, String> {
-        let entry = self
-            ._plugins
-            .get_mut(plugin_id)
-            .ok_or_else(|| format!("plugin {} not found", plugin_id))?;
+    fn deactivate(&mut self, plugin_id: &str) -> ApiResponse<()> {
+        let entry = self._plugins.get_mut(plugin_id);
 
-        if entry.status == PluginStatus::Disabled {
-            return Ok(ApiResponse::warning(format!(
-                "plugin {} is disabled",
-                plugin_id
-            )));
+        if let Some(e) = entry {
+            if e.status == PluginStatus::Disabled {
+                return ApiResponse::warning(format!("plugin {} is disabled", plugin_id));
+            }
+
+            if e.status != PluginStatus::Activated {
+                return ApiResponse::warning(format!("plugin {} is not activated", plugin_id));
+            }
+
+            e.status = PluginStatus::Inactive;
+
+            ApiResponse::ok()
+        } else {
+            ApiResponse::error(format!("plugin {} not found", plugin_id))
         }
-
-        if entry.status != PluginStatus::Activated {
-            return Ok(ApiResponse::warning(format!(
-                "plugin {} is not activated",
-                plugin_id
-            )));
-        }
-
-        let _ = entry.module.deactivate();
-        entry.status = PluginStatus::Inactive;
-
-        self._contexts.remove(plugin_id);
-
-        Ok(ApiResponse::ok())
     }
 
-    fn disable(&mut self, plugin_id: &str) -> Result<ApiResponse<()>, String> {
-        let entry = self
-            ._plugins
-            .get_mut(plugin_id)
-            .ok_or_else(|| format!("plugin {} not found", plugin_id))?;
+    fn disable(&mut self, plugin_id: &str) -> ApiResponse<()> {
+        let entry = self._plugins.get_mut(plugin_id);
+        // .ok_or_else(|| format!("plugin {} not found", plugin_id))?;
+        if let Some(e) = entry {
+            if e.status == PluginStatus::Disabled {
+                return ApiResponse::warning(format!("plugin {} is already disabled", plugin_id));
+            }
 
-        if entry.status == PluginStatus::Disabled {
-            return Ok(ApiResponse::warning(format!(
-                "plugin {} is already disabled",
-                plugin_id
-            )));
+            e.status = PluginStatus::Disabled;
+
+            ApiResponse::ok()
+        } else {
+            ApiResponse::error(format!("plugin {} not found", plugin_id))
         }
-
-        if entry.status == PluginStatus::Activated {
-            let _ = entry.module.deactivate();
-            self._contexts.remove(plugin_id);
-        }
-
-        entry.status = PluginStatus::Disabled;
-
-        Ok(ApiResponse::ok())
     }
 }

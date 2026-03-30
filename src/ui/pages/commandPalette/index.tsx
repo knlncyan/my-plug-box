@@ -21,13 +21,14 @@ import { toast } from "sonner"
 export const useCommandPaletteDialog = createPopup();
 
 export default () => {
-    const { commands, executeCommand } = useCoreRuntime();
+    const { plugins, executeCommand } = useCoreRuntime();
     const [query, setQuery] = useState('');
     const { open } = useCommandPaletteDialog.use();
 
     const commandGroups = useMemo(() => {
         const normalized = query.trim().toLowerCase();
-        const list = [...commands].sort((a, b) => a.id.localeCompare(b.id));
+        const commands = plugins.flatMap(it => it.commandsMeta);
+        const list = commands.sort((a, b) => a.id.localeCompare(b.id));
         if (!normalized) return groupBy(list, 'pluginId');
         const filteredCommands = list.filter((command) => (
             command.id.toLowerCase().includes(normalized) ||
@@ -35,7 +36,7 @@ export default () => {
             command.pluginId.toLowerCase().includes(normalized)
         ));
         return groupBy(filteredCommands, 'pluginId');
-    }, [commands, query]);
+    }, [plugins, query]);
 
     async function runCommand(commandId: string): Promise<void> {
         try {

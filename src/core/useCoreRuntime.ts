@@ -12,10 +12,8 @@ function useHostRuntime() {
         ...snapshot,
         executeCommand: coreRuntime.executeCommand,
         setActiveView: coreRuntime.setActiveView,
-        setCommandShortcut: coreRuntime.setCommandShortcut,
-        clearCommandShortcut: coreRuntime.clearCommandShortcut,
-        registerSystemShortcut: coreRuntime.registerSystemShortcut,
-        refreshExternalPlugins: coreRuntime.refreshExternalPlugins,
+        refresh: coreRuntime.refresh,
+        shutdown: coreRuntime.shutdown,
     };
 }
 

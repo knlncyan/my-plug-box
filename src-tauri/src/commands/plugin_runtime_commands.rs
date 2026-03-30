@@ -1,4 +1,4 @@
-use crate::core::{ApiResponse, CommandMeta, PluginManager, PluginManagerActivation, PluginSummary};
+use crate::core::{ApiResponse, PluginEntry, PluginManager, PluginManagerActivation};
 use std::sync::Mutex;
 use tauri::{command, State};
 
@@ -6,58 +6,50 @@ fn lock_error<T>() -> ApiResponse<T> {
     ApiResponse::error("failed to acquire plugin manager lock".to_string())
 }
 
+/// 获取插件运行时（包含状态），不重新加载插件资源
 #[command]
-pub fn get_plugin_list(manager: State<'_, Mutex<PluginManager>>) -> ApiResponse<Vec<PluginSummary>> {
-    let mgr = match manager.lock() {
-        Ok(mgr) => mgr,
-        Err(_) => return lock_error(),
-    };
-    ApiResponse::success(mgr.list_plugins(), "Ok".to_string())
-}
-
-#[command]
-pub fn get_registered_commands(
+pub fn get_plugins_runtime(
     manager: State<'_, Mutex<PluginManager>>,
-) -> ApiResponse<Vec<CommandMeta>> {
+) -> ApiResponse<Vec<PluginEntry>> {
     let mgr = match manager.lock() {
         Ok(mgr) => mgr,
         Err(_) => return lock_error(),
     };
-    ApiResponse::success(mgr.get_all_commands(), "Ok".to_string())
+    ApiResponse::success(mgr.list_plugins_runtime(), "Ok".to_string())
 }
 
 #[command]
-pub fn activate_plugin(manager: State<'_, Mutex<PluginManager>>, plugin_id: String) -> ApiResponse<()> {
+pub fn activate_plugin(
+    manager: State<'_, Mutex<PluginManager>>,
+    plugin_id: String,
+) -> ApiResponse<()> {
     let mut mgr = match manager.lock() {
         Ok(mgr) => mgr,
         Err(_) => return lock_error(),
     };
-    match mgr.activate_by_id(&plugin_id) {
-        Ok(resp) => resp,
-        Err(err) => ApiResponse::error(err),
-    }
+    mgr.activate(&plugin_id)
 }
 
 #[command]
-pub fn deactivate_plugin(manager: State<'_, Mutex<PluginManager>>, plugin_id: String) -> ApiResponse<()> {
+pub fn deactivate_plugin(
+    manager: State<'_, Mutex<PluginManager>>,
+    plugin_id: String,
+) -> ApiResponse<()> {
     let mut mgr = match manager.lock() {
         Ok(mgr) => mgr,
         Err(_) => return lock_error(),
     };
-    match mgr.deactivate(&plugin_id) {
-        Ok(resp) => resp,
-        Err(err) => ApiResponse::error(err),
-    }
+    mgr.deactivate(&plugin_id)
 }
 
 #[command]
-pub fn disable_plugin(manager: State<'_, Mutex<PluginManager>>, plugin_id: String) -> ApiResponse<()> {
+pub fn disable_plugin(
+    manager: State<'_, Mutex<PluginManager>>,
+    plugin_id: String,
+) -> ApiResponse<()> {
     let mut mgr = match manager.lock() {
         Ok(mgr) => mgr,
         Err(_) => return lock_error(),
     };
-    match mgr.disable(&plugin_id) {
-        Ok(resp) => resp,
-        Err(err) => ApiResponse::error(err),
-    }
+    mgr.disable(&plugin_id)
 }

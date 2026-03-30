@@ -12,7 +12,7 @@ import { MyTooltip } from "@/components/MyTooltip";
 import KeyboardShortcutsPage from "../pages/keyboardShortcuts";
 
 export default () => {
-    const { plugins, activeViewPluginId, setActiveView, registerSystemShortcut } = useCoreRuntime();
+    const { plugins, activeViewPluginId, setActiveView } = useCoreRuntime();
     // 侧边栏隐藏
     const hiddenAside = useAsideStateStore(it => it.hiddenAside);
     const toggleAside = useAsideStateStore(it => it.toggleAside);
@@ -29,28 +29,23 @@ export default () => {
     const [search, setSearch] = useState<string>('');
     const setMainViewContent = useAppViewStore(state => state.setMainViewContent);
 
-    useEffect(() => {
-        return registerSystemShortcut('Ctrl+Shift+P', () => {
-            useCommandPaletteDialog.show();
-        });
-    }, [registerSystemShortcut]);
     const selectViewPlugin = useCallback(
-        (viewId: string) => {
-            setActiveView(viewId);
+        (pluginId: string) => {
+            setActiveView(pluginId);
         },
         [setActiveView]
     );
 
     const { activatedPlugins, handledPlugins } = useMemo(() => {
-        const activatedPlugins = plugins.filter(it => it.status === 'activated');
+        const activatedPlugins = plugins.filter(it => it.status === 'activated').map(it => it.manifest);
         // 过滤
         const filteredPlugins = plugins.filter(it => {
-            return (!hiddenBackend || it.view) && (it.name.includes(search) || it.description?.includes(search))
+            return (!hiddenBackend || it.viewMeta) && (it.manifest.name.includes(search) || it.manifest.description?.includes(search))
         });
         // 排序
         const handledPlugins = plugOrderKey == 'activate'
             ? filteredPlugins.sort((a, _) => (a.status === 'activated' ? -1 : 1))
-            : filteredPlugins.sort((a, b) => a.name.localeCompare(b.name));
+            : filteredPlugins.sort((a, b) => a.manifest.name.localeCompare(b.manifest.name));
         return { activatedPlugins, handledPlugins };
     }, [plugins, hiddenBackend, plugOrderKey, search]);
 
@@ -132,27 +127,27 @@ export default () => {
                             {plugViewMode == 'list'
                                 ? <ItemGroup className="gap-4">
                                     {handledPlugins.map((plugin) => (
-                                        <Item key={plugin.id} variant="outline" asChild role="listitem" onClick={() => handlePlugSelect(plugin.id)}>
-                                            <div className={`flex items-center cursor-pointer gap-4 relative ${activeViewPluginId == plugin.id ? 'bg-neutral-700 text-white hover:bg-neutral-700!' : 'hover:bg-neutral-200!'}`}>
+                                        <Item key={plugin.pluginId} variant="outline" asChild role="listitem" onClick={() => handlePlugSelect(plugin.pluginId)}>
+                                            <div className={`flex items-center cursor-pointer gap-4 relative ${activeViewPluginId == plugin.pluginId ? 'bg-neutral-700 text-white hover:bg-neutral-700!' : 'hover:bg-neutral-200!'}`}>
                                                 <ItemMedia variant="image">
-                                                    {plugin.icon ? (
+                                                    {plugin.manifest.icon ? (
                                                         <img
-                                                            src={plugin.icon}
+                                                            src={plugin.manifest.icon}
                                                             // src='/public/vite.svg'
-                                                            alt={plugin.name}
+                                                            alt={plugin.manifest.name}
                                                             width={32}
                                                             height={32}
                                                             className="w-full h-full object-cover"
                                                         />
                                                     ) : (
-                                                        <span className={`text-[20px] font-bold  ${activeViewPluginId == plugin.id ? 'text-white' : 'text-neutral-700'}`}>{plugin.name?.trim().charAt(0).toUpperCase()}</span>
+                                                        <span className={`text-[20px] font-bold  ${activeViewPluginId == plugin.manifest.id ? 'text-white' : 'text-neutral-700'}`}>{plugin.manifest.name?.trim().charAt(0).toUpperCase()}</span>
                                                     )}
                                                 </ItemMedia>
                                                 <ItemContent className="flex-1 min-w-0">
                                                     <ItemTitle className="block w-full line-clamp-1">
-                                                        {plugin.name}
+                                                        {plugin.manifest.name}
                                                     </ItemTitle>
-                                                    <ItemDescription className={`line-clamp-1 ${activeViewPluginId == plugin.id && 'text-neutral-300'}`}>{plugin.description}</ItemDescription>
+                                                    <ItemDescription className={`line-clamp-1 ${activeViewPluginId == plugin.manifest.id && 'text-neutral-300'}`}>{plugin.manifest.description}</ItemDescription>
                                                 </ItemContent>
                                                 {/* 增加一个表示状态的小圆点*/}
                                                 <div className="absolute bottom-2 right-2 w-1.5 h-1.5 rounded-full bg-green-500" />
@@ -163,33 +158,33 @@ export default () => {
                                 : <ItemGroup className={`grid ${plugViewMode == 'grid-medium' ? 'grid-cols-2' : 'grid-cols-3'} gap-3`}>
                                     {handledPlugins.map((plugin) => (
                                         <Item
-                                            key={plugin.id}
+                                            key={plugin.pluginId}
                                             variant="muted"
                                             // 1. 保持 aspect-square 确保整体是正方形
                                             // 2. 移除 flex gap-1 从根节点，改为在内部需要的地方加，避免影响正方形计算
-                                            className={`relative cursor-pointer aspect-square p-2 ${activeViewPluginId == plugin.id ? 'bg-neutral-700 text-white' : 'hover:bg-neutral-200'}`}
-                                            onClick={() => handlePlugSelect(plugin.id)}
+                                            className={`relative cursor-pointer aspect-square p-2 ${activeViewPluginId == plugin.manifest.id ? 'bg-neutral-700 text-white' : 'hover:bg-neutral-200'}`}
+                                            onClick={() => handlePlugSelect(plugin.manifest.id)}
                                         >
                                             {/* 内部容器：负责垂直排列图片和文字，并居中 */}
                                             <div className="flex flex-col items-center justify-center w-full h-full gap-1">
                                                 {/* 图标/首字母区域：固定宽度或最大宽度，确保在不同模式下占据空间一致 */}
                                                 <div className="flex items-center justify-center w-full">
-                                                    {plugin.icon ? (
+                                                    {plugin.manifest.icon ? (
                                                         <img
-                                                            src={plugin.icon}
-                                                            alt={plugin.name}
+                                                            src={plugin.manifest.icon}
+                                                            alt={plugin.manifest.name}
                                                             className={`max-w-[80%] max-h-[80%] w-auto h-auto object-contain ${plugViewMode !== 'grid-medium' ? 'max-w-[60%] max-h-[60%]' : ''}`}
                                                         />
                                                     ) : (
-                                                        <span className={`text-2xl font-bold leading-none ${activeViewPluginId == plugin.id ? 'text-white' : 'text-neutral-700'}`}>
-                                                            {plugin.name?.trim().charAt(0).toUpperCase()}
+                                                        <span className={`text-2xl font-bold leading-none ${activeViewPluginId == plugin.pluginId ? 'text-white' : 'text-neutral-700'}`}>
+                                                            {plugin.manifest.name?.trim().charAt(0).toUpperCase()}
                                                         </span>
                                                     )}
                                                 </div>
                                                 {/* 文字区域：仅在 grid-medium 显示 */}
                                                 {plugViewMode == 'grid-medium' && (
                                                     <ItemTitle className="block w-full text-xs text-center line-clamp-1 font-medium">
-                                                        {plugin.name}
+                                                        {plugin.manifest.name}
                                                     </ItemTitle>
                                                 )}
                                             </div>
@@ -215,19 +210,19 @@ export default () => {
                     <div className='p-1 w-10 h-full overflow-y-auto [&::-webkit-scrollbar]:hidden scrollbar-width-0'>
                         {handledPlugins.map((plugin) => (
                             <div
-                                key={plugin.id}
-                                className={`flex items-center justify-center relative cursor-pointer mb-1 w-8 h-8 rounded ${activeViewPluginId == plugin.id ? 'bg-neutral-700 text-white' : 'hover:bg-neutral-200'}`}
-                                onClick={() => handlePlugSelect(plugin.id)}
+                                key={plugin.pluginId}
+                                className={`flex items-center justify-center relative cursor-pointer mb-1 w-8 h-8 rounded ${activeViewPluginId == plugin.pluginId ? 'bg-neutral-700 text-white' : 'hover:bg-neutral-200'}`}
+                                onClick={() => handlePlugSelect(plugin.pluginId)}
                             >
-                                {plugin.icon ? (
+                                {plugin.manifest.icon ? (
                                     <img
-                                        src={plugin.icon}
-                                        alt={plugin.name}
+                                        src={plugin.manifest.icon}
+                                        alt={plugin.manifest.name}
                                         className='w-6 h-6 object-contain'
                                     />
                                 ) : (
-                                    <span className={`text-xl font-bold leading-none ${activeViewPluginId == plugin.id ? 'text-white' : 'text-neutral-700'}`}>
-                                        {plugin.name?.trim().charAt(0).toUpperCase()}
+                                    <span className={`text-xl font-bold leading-none ${activeViewPluginId == plugin.pluginId ? 'text-white' : 'text-neutral-700'}`}>
+                                        {plugin.manifest.name?.trim().charAt(0).toUpperCase()}
                                     </span>
                                 )}
                                 <div className="absolute bottom-0.5 right-0.5 w-1 h-1 rounded-full bg-green-500" />

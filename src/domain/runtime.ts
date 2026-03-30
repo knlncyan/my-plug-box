@@ -1,4 +1,4 @@
-import type { CommandMeta, PluginSummary } from './protocol/plugin-catalog.protocol';
+import type { PluginEntry } from './protocol/plugin-catalog.protocol';
 
 /**
  * 命令执行可选参数：
@@ -27,6 +27,5 @@ export interface PluginRuntimeSnapshot {
     ready: boolean;
     error: string | null;
     activeViewPluginId: string | null;
-    plugins: PluginSummary[];
-    commands: CommandMeta[];
+    plugins: PluginEntry[];
 }

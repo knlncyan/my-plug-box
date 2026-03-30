@@ -4,12 +4,11 @@ import type {
     ExecuteCommandPipelineOptions,
     PluginRuntimeSnapshot,
 } from '../../domain/runtime';
-import type { CommandMeta, PluginSummary } from '../../domain/protocol/plugin-catalog.protocol';
+import type { CommandMeta, PluginEntry } from '../../domain/protocol/plugin-catalog.protocol';
 import { PluginDisposable } from '../PluginDisposable';
 import { PluginAssetCatalogService } from './PluginAssetCatalogService';
-import { CommandKeybindingService } from './CommandKeybindingService';
-import { PluginCommandService } from './PluginCommandService';
 import { WorkerSandboxService } from './WorkerSandboxService';
+import { activationEventMatches, isActivated, isDisabled } from '../utils/pluginUtils';
 
 type Listener = () => void;
 
@@ -17,22 +16,10 @@ type SystemShortcutHandler = () => void | Promise<void>;
 
 interface PluginRuntimeServiceDeps {
     pluginAssetCatalogService: PluginAssetCatalogService;
-    pluginCommandService: PluginCommandService;
+    // pluginCommandService: PluginCommandService;
     workerSandboxService: WorkerSandboxService;
-    commandKeybindingService: CommandKeybindingService;
+    // commandKeybindingService: CommandKeybindingService;
     pluginDisposable: PluginDisposable;
-}
-
-function statusOf(plugin: PluginSummary | undefined): string {
-    return String(plugin?.status ?? '').trim().toLowerCase();
-}
-
-function isActivated(plugin: PluginSummary | undefined): boolean {
-    return statusOf(plugin) === 'activated';
-}
-
-function isDisabled(plugin: PluginSummary | undefined): boolean {
-    return statusOf(plugin) === 'disabled';
 }
 
 export class PluginRuntimeService {
@@ -42,15 +29,12 @@ export class PluginRuntimeService {
         error: null,
         activeViewPluginId: null,
         plugins: [],
-        commands: [],
     };
-
+    private readonly activatedFrontendWorkerIds = new Set<string>();
     private readonly listeners = new Set<Listener>();
-    private readonly keybindingChangeDisposer: () => void;
     private initPromise: Promise<void> | null = null;
     private shutdownPromise: Promise<void> | null = null;
-    private readonly activatedFrontendWorkerIds = new Set<string>();
-    private commandCatalogRaw: CommandMeta[] = [];
+
 
     constructor(private readonly deps: PluginRuntimeServiceDeps) {
         this.deps.workerSandboxService.setCommandExecutor(
@@ -58,23 +42,8 @@ export class PluginRuntimeService {
                 this.executeCommandInternal(commandId, options, ...args)
         );
 
-        this.deps.commandKeybindingService.setCommandExecutor(async (commandId: string) => {
-            await this.executeCommandInternal(commandId, { trace: [] });
-            return null;
-        });
-
         this.deps.workerSandboxService.setViewActivator((viewId: string) => {
             this.setActiveView(viewId);
-        });
-
-        this.deps.pluginCommandService.setPluginActivator((pluginId, activationEvent) =>
-            this.ensurePluginReady(pluginId, activationEvent)
-        );
-
-        this.keybindingChangeDisposer = this.deps.commandKeybindingService.onDidChange(() => {
-            this.patch({
-                commands: this.deps.commandKeybindingService.decorateCommands(this.commandCatalogRaw),
-            });
         });
     }
 
@@ -93,10 +62,22 @@ export class PluginRuntimeService {
         return this.initPromise;
     };
 
-    refreshExternalPlugins = async (): Promise<void> => {
-        await this.deps.pluginAssetCatalogService.refreshFromBackend();
+    private async bootstrap(): Promise<void> {
+        this.patch({ loading: true, error: null });
+        try {
+            await this.deps.pluginAssetCatalogService.initLoadPlugins();
+            // await this.deps.commandKeybindingService.start();
+            await this.refreshAll();
+            this.patch({ loading: false, ready: true, error: null });
+        } catch (error) {
+            this.patch({ loading: false, ready: false, error: String(error) });
+            throw error;
+        }
+    }
+
+    refresh = async (): Promise<void> => {
+        await this.deps.pluginAssetCatalogService.refreshFromBackend(true);
         await this.refreshAll();
-        await this.syncFrontendModuleState();
     };
 
     shutdown = async (): Promise<void> => {
@@ -107,31 +88,37 @@ export class PluginRuntimeService {
         return this.shutdownPromise;
     };
 
-    setActiveView = (viewId: string | null): void => {
-        if (viewId === null) {
+    // ========================================================= 上面的方法是基本核心方法 ==============================================================
+
+    /**
+     * 激活相应插件的视图
+     * @param pluginId 插件id
+     */
+    setActiveView = (pluginId: string | null): void => {
+        if (pluginId === null) {
             this.patch({ activeViewPluginId: null, error: null });
             return;
         }
 
-        const plugin = this.resolvePluginByTarget(viewId);
+        const plugin = this.deps.pluginAssetCatalogService.getPluginEntryById(pluginId);
         if (!plugin) {
-            this.patch({ error: `View not found: ${String(viewId)}` });
+            this.patch({ error: `View not found: ${String(pluginId)}` });
             return;
         }
 
-        if (!plugin.view) {
-            this.patch({ error: `Plugin "${plugin.id}" has no view entry.` });
+        if (!plugin.viewMeta) {
+            this.patch({ error: `Plugin "${plugin.pluginId}" has no view entry.` });
             return;
         }
 
         if (isDisabled(plugin)) {
-            this.patch({ error: `Plugin "${plugin.id}" is disabled.` });
+            this.patch({ error: `Plugin "${plugin.pluginId}" is disabled.` });
             return;
         }
 
-        void this.ensurePluginReady(plugin.id, `onView:${plugin.view.id}`)
+        void this.ensurePluginReady(plugin.pluginId, `onView:${plugin?.viewMeta?.id}`)
             .then(() => {
-                this.patch({ activeViewPluginId: plugin.id, error: null });
+                this.patch({ activeViewPluginId: plugin.pluginId, error: null });
             })
             .catch((error) => {
                 this.patch({ error: String(error) });
@@ -146,85 +133,80 @@ export class PluginRuntimeService {
         return this.executeCommandInternal(commandId, { ...options, trace: [] }, ...args);
     };
 
-    setCommandShortcut = async (commandId: string, shortcut: string | null): Promise<void> => {
-        await this.deps.commandKeybindingService.setUserShortcut(commandId, shortcut);
-    };
-
-    clearCommandShortcut = async (commandId: string): Promise<void> => {
-        await this.deps.commandKeybindingService.clearUserShortcut(commandId);
-    };
-
-    registerSystemShortcut = (shortcut: string, handler: SystemShortcutHandler): (() => void) => {
-        return this.deps.commandKeybindingService.registerSystemShortcut(shortcut, handler);
-    };
-
     private async executeCommandInternal(
         commandId: string,
         options: ExecuteCommandPipelineOptions,
         ...args: unknown[]
     ): Promise<unknown> {
-        return this.deps.pluginCommandService.executeCommand(
+        // await this.ensureLoaded();
+
+        const commandMeta = this.deps.pluginAssetCatalogService.getCommandById(commandId);
+        if (!commandMeta) {
+            throw new Error(`Command not found: ${commandId}`);
+        }
+
+        // 命令链路防循环：A -> B -> A。
+        const trace = options.trace ?? [];
+        if (trace.includes(commandId)) {
+            const chain = [...trace, commandId].join(' -> ');
+            throw new Error(`Detected command cycle: ${chain}`);
+        }
+        const nextTrace = [...trace, commandId];
+
+        const ownerPluginId = commandMeta.pluginId;
+        const ownerPlugin = this.deps.pluginAssetCatalogService.getPluginEntryById(ownerPluginId);
+        if (isDisabled(ownerPlugin)) {
+            throw new Error(`Plugin "${ownerPluginId}" is disabled`);
+        }
+
+        if (!isActivated(ownerPlugin)) {
+            await this.ensurePluginReady(ownerPluginId, `onCommand:${commandId}`);
+        }
+
+        const result = await this.deps.workerSandboxService.executeCommand(
+            ownerPluginId,
             commandId,
-            {
-                ...options,
-                activateView: options.activateView ?? this.setActiveView,
-            },
-            ...args
+            args,
+            nextTrace
         );
+
+        return result;
     }
 
-    private resolvePluginByTarget(target: string): PluginSummary | null {
-        const byPluginId = this.snapshot.plugins.find((candidate) => candidate.id === target);
-        if (byPluginId) {
-            return byPluginId;
+
+
+
+
+
+    private async disposeRuntime(): Promise<void> {
+        if (this.initPromise) {
+            try {
+                await this.initPromise;
+            } catch {
+                // 初始化失败时也继续关闭，避免资源泄漏。
+                console.log('程序初始化失败，仍然进行资源释放');
+            }
         }
 
-        const byViewId = this.snapshot.plugins.find((candidate) => candidate.view?.id === target);
-        if (byViewId) {
-            return byViewId;
-        }
-
-        const manifest = this.deps.pluginAssetCatalogService.getManifestByViewId(target);
-        if (manifest) {
-            return this.snapshot.plugins.find((candidate) => candidate.id === manifest.id) ?? null;
-        }
-
-        return null;
+        this.activatedFrontendWorkerIds.clear();
+        // this.deps.commandKeybindingService.stop();
+        // this.deps.pluginCommandService.setCommandCatalog([]);
+        // this.deps.pluginCommandService.setPluginCatalog([]);
+        // this.keybindingChangeDisposer();
+        await this.deps.pluginDisposable.dispose('__global__');
+        this.patch({
+            loading: false,
+            ready: false,
+            error: null,
+            activeViewPluginId: null,
+            plugins: [],
+        });
     }
 
-    private resolveActivePluginId(plugins: PluginSummary[], preferredPluginId: string | null): string | null {
-        const currentPlugin = preferredPluginId
-            ? plugins.find((candidate) => candidate.id === preferredPluginId)
-            : null;
-
-        if (currentPlugin && isActivated(currentPlugin) && currentPlugin.view && !isDisabled(currentPlugin)) {
-            return currentPlugin.id;
-        }
-
-        const firstActivatedWithView = plugins.find(
-            (candidate) => isActivated(candidate) && !!candidate.view && !isDisabled(candidate)
-        );
-        if (firstActivatedWithView?.view) {
-            return firstActivatedWithView.id;
-        }
-
-        const firstViewPlugin = plugins.find((candidate) => candidate.view && !isDisabled(candidate));
-        return firstViewPlugin?.id ?? null;
-    }
-
-    private activationEventMatches(rule: string, event: string): boolean {
-        if (rule === '*') {
-            return true;
-        }
-        if (rule.endsWith('*')) {
-            return event.startsWith(rule.slice(0, -1));
-        }
-        return rule === event;
-    }
-
+    // 校验事件激活
     private canActivateByEvent(pluginId: string, activationEvent?: string): boolean {
-        const manifest = this.deps.pluginAssetCatalogService.getManifestById(pluginId);
-        const rules = manifest?.activationEvents ?? [];
+        const pluginEntry = this.deps.pluginAssetCatalogService.getPluginEntryById(pluginId);
+        const rules = pluginEntry?.manifest?.activationEvents ?? [];
 
         if (rules.length === 0) {
             return true;
@@ -233,53 +215,15 @@ export class PluginRuntimeService {
             return false;
         }
 
-        return rules.some((rule) => this.activationEventMatches(rule, activationEvent));
+        return rules.some((rule) => activationEventMatches(rule, activationEvent));
     }
-
-    private async bootstrap(): Promise<void> {
-        this.patch({ loading: true, error: null });
-        try {
-            await this.deps.pluginAssetCatalogService.validateManifestConsistency();
-            await this.deps.pluginAssetCatalogService.registerPlugins();
-            await this.deps.commandKeybindingService.start();
-            await this.refreshAll();
-            await this.syncFrontendModuleState();
-            this.patch({ loading: false, ready: true, error: null });
-        } catch (error) {
-            this.patch({ loading: false, ready: false, error: String(error) });
-            throw error;
-        }
-    }
-
-    private async disposeRuntime(): Promise<void> {
-        if (this.initPromise) {
-            try {
-                await this.initPromise;
-            } catch {
-                // 初始化失败时也继续关闭，避免资源泄漏。
-            }
-        }
-
-        this.activatedFrontendWorkerIds.clear();
-        this.deps.commandKeybindingService.stop();
-        this.deps.pluginCommandService.setCommandCatalog([]);
-        this.deps.pluginCommandService.setPluginCatalog([]);
-        this.commandCatalogRaw = [];
-        this.keybindingChangeDisposer();
-        await this.deps.pluginDisposable.dispose('__global__');
-
-        this.patch({
-            loading: false,
-            ready: false,
-            error: null,
-            activeViewPluginId: null,
-            plugins: [],
-            commands: [],
-        });
-    }
-
+    /**
+     * 校验激活事件并激活插件
+     * @param pluginId 
+     * @param activationEvent 
+     */
     private async ensurePluginReady(pluginId: string, activationEvent?: string): Promise<void> {
-        const current = this.snapshot.plugins.find((candidate) => candidate.id === pluginId);
+        const current = this.snapshot.plugins.find((candidate) => candidate.pluginId === pluginId);
         if (!current) {
             throw new Error(`Plugin not found: ${pluginId}`);
         }
@@ -296,12 +240,6 @@ export class PluginRuntimeService {
 
             await service.activatePlugin(pluginId);
             await this.refreshAll();
-
-            const refreshed = this.snapshot.plugins.find((candidate) => candidate.id === pluginId);
-            if (!isActivated(refreshed)) {
-                const errorText = refreshed?.error ? ` (${refreshed.error})` : '';
-                throw new Error(`Activate plugin failed: ${pluginId}${errorText}`);
-            }
         }
 
         if (!this.activatedFrontendWorkerIds.has(pluginId)) {
@@ -310,37 +248,39 @@ export class PluginRuntimeService {
         }
     }
 
-    private async syncFrontendModuleState(): Promise<void> {
-        for (const plugin of this.snapshot.plugins) {
-            const pluginId = plugin.id;
-            if (isActivated(plugin) && !isDisabled(plugin)) {
-                if (!this.activatedFrontendWorkerIds.has(pluginId)) {
-                    await this.deps.workerSandboxService.activate(pluginId);
-                    this.activatedFrontendWorkerIds.add(pluginId);
-                }
-            } else if (this.activatedFrontendWorkerIds.has(pluginId)) {
-                await this.deps.workerSandboxService.deactivate(pluginId);
-                this.activatedFrontendWorkerIds.delete(pluginId);
-            }
+    // 尝试找到第一个可以激活视图的插件来显示视图
+    private resolveActivePluginId(plugins: PluginEntry[], preferredPluginId: string | null): string | null {
+        const currentPlugin = preferredPluginId
+            ? plugins.find((candidate) => candidate.pluginId === preferredPluginId)
+            : null;
+
+        if (currentPlugin && isActivated(currentPlugin) && currentPlugin.viewMeta && !isDisabled(currentPlugin)) {
+            return currentPlugin.pluginId;
         }
+
+        const firstActivatedWithView = plugins.find(
+            (candidate) => isActivated(candidate) && !!candidate.viewMeta && !isDisabled(candidate)
+        );
+        if (firstActivatedWithView?.viewMeta) {
+            return firstActivatedWithView.pluginId;
+        }
+
+        const firstViewPlugin = plugins.find((candidate) => candidate.viewMeta && !isDisabled(candidate));
+        return firstViewPlugin?.pluginId ?? null;
     }
 
     private async refreshAll(): Promise<void> {
-        const [pluginsReponse, commandsReponse] = await Promise.all([service.listPlugins(), service.listCommands()]);
-        const plugins = pluginsReponse.data ?? [];
-        const commandsRaw = commandsReponse.data ?? [];
+        const pluginEntries = this.deps.pluginAssetCatalogService.getAllPluginEntry();
+        // const plugins = pluginsReponse.data ?? [];
+        // const commandsRaw = commandsReponse.data ?? [];
 
-        this.commandCatalogRaw = commandsRaw;
-        this.deps.commandKeybindingService.setCommandCatalog(commandsRaw);
-        const commands = this.deps.commandKeybindingService.decorateCommands(commandsRaw);
-
-        this.deps.pluginCommandService.setPluginCatalog(plugins);
-        this.deps.pluginCommandService.setCommandCatalog(commands);
+        // this.commandCatalogRaw = commandsRaw;
+        // this.deps.commandKeybindingService.setCommandCatalog(commandsRaw);
+        // const commands = this.deps.commandKeybindingService.decorateCommands(commandsRaw);
 
         this.patch({
-            plugins,
-            commands,
-            activeViewPluginId: this.resolveActivePluginId(plugins, this.snapshot.activeViewPluginId),
+            plugins: pluginEntries,
+            activeViewPluginId: this.resolveActivePluginId(pluginEntries, this.snapshot.activeViewPluginId),
             error: null,
         });
     }

@@ -1,6 +1,6 @@
 import { SimpleContainer } from './ioc/SimpleContainer';
 import { PluginAssetCatalogService } from './service/PluginAssetCatalogService';
-import { PluginCommandService } from './service/PluginCommandService';
+// import { PluginCommandService } from './service/PluginCommandService';
 import { PluginRuntimeService } from './service/PluginRuntimeService';
 import { PluginSettingService } from './service/PluginSettingService';
 import { PluginStorageService } from './service/PluginStorageService';
@@ -48,22 +48,22 @@ container.registerSingleton(
         })
 );
 
-container.registerSingleton(
-    PluginCommandService,
-    () =>
-        new PluginCommandService({
-            workerSandboxService: container.resolve(WorkerSandboxService),
-        })
-);
+// container.registerSingleton(
+//     PluginCommandService,
+//     () =>
+//         new PluginCommandService({
+//             workerSandboxService: container.resolve(WorkerSandboxService),
+//         })
+// );
 
 container.registerSingleton(
     PluginRuntimeService,
     () =>
         new PluginRuntimeService({
             pluginAssetCatalogService: container.resolve(PluginAssetCatalogService),
-            pluginCommandService: container.resolve(PluginCommandService),
+            // pluginCommandService: container.resolve(PluginCommandService),
             workerSandboxService: container.resolve(WorkerSandboxService),
-            commandKeybindingService: container.resolve(CommandKeybindingService),
+            // commandKeybindingService: container.resolve(CommandKeybindingService),
             pluginDisposable: container.resolve(PluginDisposable),
         })
 );

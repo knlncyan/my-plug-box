@@ -1,11 +1,12 @@
 import { CSSProperties, useEffect } from "react";
 import { X, Minus, Copy, ChevronDown } from "lucide-react";
 import { getCurrentWindow } from "@tauri-apps/api/window"
-import { coreRuntime } from "@/core";
+import { useCoreRuntime } from "@/core";
 import lifecycleTrigger from "@/lib/lifecycleTrigger";
 import { listen } from "@tauri-apps/api/event";
 
 export default () => {
+    const { shutdown } = useCoreRuntime();
     const appWindow = getCurrentWindow();
 
     const minimize = () => {
@@ -17,7 +18,7 @@ export default () => {
     }
 
     const closeApp = async () => {
-        await coreRuntime.shutdown();
+        shutdown();
         await lifecycleTrigger.shutdownClose();
         // alert("清理完成");
         appWindow.close();

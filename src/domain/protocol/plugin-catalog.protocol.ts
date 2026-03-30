@@ -23,10 +23,11 @@ export type PluginStatus =
 
 export type ShortcutScope = 'local' | 'global';
 
-export interface PluginViewManifest {
+export interface ViewMeta {
     id: string;
     title: string;
     pluginId: string;
+    viewUrl: string;
     props: Record<string, unknown>;
 }
 
@@ -36,17 +37,6 @@ export interface CommandMeta {
     pluginId: string;
     shortcut?: string;
     shortcutScope?: ShortcutScope;
-}
-
-export interface PluginSummary {
-    id: string;
-    name: string;
-    version: string;
-    status: PluginStatus;
-    icon?: string;
-    error?: string;
-    description?: string;
-    view?: PluginViewManifest;
 }
 
 export interface PluginCommandManifest {
@@ -63,8 +53,13 @@ export interface PluginManifest {
     icon?: string;
     description?: string;
     activationEvents?: string[];
-    view?: PluginViewManifest;
-    commands?: PluginCommandManifest[];
-    moduleUrl?: string;
-    viewUrl?: string;
+}
+
+export interface PluginEntry {
+    pluginId: string,
+    manifest: PluginManifest,
+    viewMeta?: ViewMeta,
+    commandsMeta: CommandMeta[],
+    status: PluginStatus,
+    moduleUrl: string;
 }

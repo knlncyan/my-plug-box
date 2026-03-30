@@ -366,7 +366,7 @@ export class WorkerSandboxService {
         const existing = this.workers.get(pluginId);
         if (existing) return existing;
 
-        const manifest = this.deps.pluginAssetCatalogService.getManifestById(pluginId);
+        const manifest = this.deps.pluginAssetCatalogService.getPluginEntryById(pluginId);
         if (!manifest) {
             throw new Error(`Plugin manifest not found: ${pluginId}`);
         }

@@ -1,5 +1,5 @@
 import { SimpleContainer } from './ioc/SimpleContainer';
-import { PluginAssetCatalogService } from './service/PluginAssetCatalogService';
+import { PluginRuntimeCatalogService } from './service/PluginRuntimeCatalogService';
 // import { PluginCommandService } from './service/PluginCommandService';
 import { PluginRuntimeService } from './service/PluginRuntimeService';
 import { PluginSettingService } from './service/PluginSettingService';
@@ -21,7 +21,7 @@ export const container = new SimpleContainer();
 container.registerSingleton(PluginEventBus, () => new PluginEventBus());
 container.registerSingleton(PluginDisposable, () => new PluginDisposable());
 container.registerSingleton(CapabilityRegistry, () => new CapabilityRegistry());
-container.registerSingleton(PluginAssetCatalogService, () => new PluginAssetCatalogService());
+container.registerSingleton(PluginRuntimeCatalogService, () => new PluginRuntimeCatalogService());
 container.registerSingleton(
     PluginSettingService,
     () => new PluginSettingService(container.resolve(PluginEventBus))
@@ -40,7 +40,7 @@ container.registerSingleton(
     () =>
         new WorkerSandboxService({
             capabilityRegistry: container.resolve(CapabilityRegistry),
-            pluginAssetCatalogService: container.resolve(PluginAssetCatalogService),
+            pluginRuntimeCatalogService: container.resolve(PluginRuntimeCatalogService),
             pluginEventBus: container.resolve(PluginEventBus),
             pluginDisposable: container.resolve(PluginDisposable),
             pluginStorageService: container.resolve(PluginStorageService),
@@ -60,7 +60,7 @@ container.registerSingleton(
     PluginRuntimeService,
     () =>
         new PluginRuntimeService({
-            pluginAssetCatalogService: container.resolve(PluginAssetCatalogService),
+            pluginRuntimeCatalogService: container.resolve(PluginRuntimeCatalogService),
             // pluginCommandService: container.resolve(PluginCommandService),
             workerSandboxService: container.resolve(WorkerSandboxService),
             // commandKeybindingService: container.resolve(CommandKeybindingService),

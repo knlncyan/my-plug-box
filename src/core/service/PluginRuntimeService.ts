@@ -1,4 +1,4 @@
-﻿import service from '../../api/plugin.service';
+import service from '../../api/plugin.service';
 import type {
     ExecuteCommandOptions,
     ExecuteCommandPipelineOptions,
@@ -6,14 +6,14 @@ import type {
 } from '../../domain/runtime';
 import type { PluginEntry } from '../../domain/protocol/plugin-catalog.protocol';
 import { PluginDisposable } from '../PluginDisposable';
-import { PluginAssetCatalogService } from './PluginAssetCatalogService';
+import { PluginRuntimeCatalogService } from './PluginRuntimeCatalogService';
 import { WorkerSandboxService } from './WorkerSandboxService';
 import { activationEventMatches, isActivated, isDisabled } from '../utils/pluginUtils';
 
 type Listener = () => void;
 
 interface PluginRuntimeServiceDeps {
-    pluginAssetCatalogService: PluginAssetCatalogService;
+    pluginRuntimeCatalogService: PluginRuntimeCatalogService;
     // pluginCommandService: PluginCommandService;
     workerSandboxService: WorkerSandboxService;
     // commandKeybindingService: CommandKeybindingService;
@@ -63,7 +63,7 @@ export class PluginRuntimeService {
     private async bootstrap(): Promise<void> {
         this.patch({ loading: true, error: null });
         try {
-            await this.deps.pluginAssetCatalogService.initLoadPlugins();
+            await this.deps.pluginRuntimeCatalogService.initLoadPlugins();
             // await this.deps.commandKeybindingService.start();
             await this.refreshAll();
             this.patch({ loading: false, ready: true, error: null });
@@ -74,7 +74,7 @@ export class PluginRuntimeService {
     }
 
     refresh = async (): Promise<void> => {
-        await this.deps.pluginAssetCatalogService.refreshFromBackend(true);
+        await this.deps.pluginRuntimeCatalogService.refreshFromBackend(true);
         await this.refreshAll();
     };
 
@@ -98,7 +98,7 @@ export class PluginRuntimeService {
             return;
         }
 
-        const plugin = this.deps.pluginAssetCatalogService.getPluginEntryById(pluginId);
+        const plugin = this.deps.pluginRuntimeCatalogService.getPluginEntryById(pluginId);
         if (!plugin) {
             this.patch({ error: `View not found: ${String(pluginId)}` });
             return;
@@ -138,7 +138,7 @@ export class PluginRuntimeService {
     ): Promise<unknown> {
         // await this.ensureLoaded();
 
-        const commandMeta = this.deps.pluginAssetCatalogService.getCommandById(commandId);
+        const commandMeta = this.deps.pluginRuntimeCatalogService.getCommandById(commandId);
         if (!commandMeta) {
             throw new Error(`Command not found: ${commandId}`);
         }
@@ -152,7 +152,7 @@ export class PluginRuntimeService {
         const nextTrace = [...trace, commandId];
 
         const ownerPluginId = commandMeta.pluginId;
-        const ownerPlugin = this.deps.pluginAssetCatalogService.getPluginEntryById(ownerPluginId);
+        const ownerPlugin = this.deps.pluginRuntimeCatalogService.getPluginEntryById(ownerPluginId);
         if (isDisabled(ownerPlugin)) {
             throw new Error(`Plugin "${ownerPluginId}" is disabled`);
         }
@@ -203,7 +203,7 @@ export class PluginRuntimeService {
 
     // 校验事件激活
     private canActivateByEvent(pluginId: string, activationEvent?: string): boolean {
-        const pluginEntry = this.deps.pluginAssetCatalogService.getPluginEntryById(pluginId);
+        const pluginEntry = this.deps.pluginRuntimeCatalogService.getPluginEntryById(pluginId);
         const rules = pluginEntry?.manifest?.activationEvents ?? [];
 
         if (rules.length === 0) {
@@ -268,7 +268,7 @@ export class PluginRuntimeService {
     }
 
     private async refreshAll(): Promise<void> {
-        const pluginEntries = this.deps.pluginAssetCatalogService.getAllPluginEntry();
+        const pluginEntries = this.deps.pluginRuntimeCatalogService.getAllPluginEntry();
         // const plugins = pluginsReponse.data ?? [];
         // const commandsRaw = commandsReponse.data ?? [];
 

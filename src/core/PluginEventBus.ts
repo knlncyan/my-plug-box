@@ -1,6 +1,8 @@
-import { PluginEvents } from '../domain/event';
-
 type EventHandler<T> = (payload: T) => void | Promise<void>;
+interface PluginEvents {
+    "setting.changed": { pluginId: string; key: string; value: unknown };
+    [event: string]: unknown;
+}
 
 export class PluginEventBus {
     private listeners = new Map<keyof PluginEvents, Set<EventHandler<unknown>>>();

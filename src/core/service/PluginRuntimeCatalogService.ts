@@ -1,11 +1,11 @@
-﻿import type { CommandMeta, PluginEntry } from '../../domain/protocol/plugin-catalog.protocol';
+import type { CommandMeta, PluginEntry } from '../../domain/protocol/plugin-catalog.protocol';
 import service from '../../api/plugin.service';
 
 /**
  * 插件资源目录服务（仅外部插件）：
  * 1) 通过后端刷新接口获取插件清单。
  */
-export class PluginAssetCatalogService {
+export class PluginRuntimeCatalogService {
     private initialized = false;
     private externalManifestLoaded = false;
 
@@ -52,7 +52,7 @@ export class PluginAssetCatalogService {
         const response = reload ? await service.refreshExternalPlugins() : await service.getPluginsRuntime();
         const payload = response.data;
         if (!Array.isArray(payload)) {
-            console.warn('[PluginAssetCatalog] backend plugin index must be an array');
+            console.warn('[PluginRuntimeCatalog] backend plugin index must be an array');
             return;
         }
         for (const raw of payload) {
@@ -68,7 +68,7 @@ export class PluginAssetCatalogService {
                     raw.commandsMeta.forEach(it => this.commandById.set(it.id, it));
                 }
             } catch (error) {
-                console.warn('[PluginAssetCatalog] failed to process plugin manifest', error);
+                console.warn('[PluginRuntimeCatalog] failed to process plugin manifest', error);
             }
         }
     }

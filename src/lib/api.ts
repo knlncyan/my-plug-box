@@ -2,13 +2,25 @@
  * Generic API interceptor pipeline and default response-code handling.
  */
 import { ApiResponse } from '@/domain/protocol';
-import type { ApiInterceptor, ApiInterceptorContext, ApiLikeResponse } from '../domain/interceptor';
 import { invoke } from '@tauri-apps/api/core';
 import { toast } from 'sonner';
 
-// interface InvokeApiOptions {
-//     allowWarning?: boolean;
-// }
+interface ApiLikeResponse {
+    success: boolean;
+    code: string;
+    message: string;
+}
+
+interface ApiInterceptorContext<TResponse = unknown> {
+    command: string;
+    payload?: Record<string, unknown>;
+    response: TResponse;
+}
+
+type ApiInterceptor = <TResponse extends ApiLikeResponse>(
+    context: ApiInterceptorContext<TResponse>
+) => void;
+
 
 class API {
     private readonly interceptors = new Set<ApiInterceptor>();

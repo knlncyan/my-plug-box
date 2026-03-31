@@ -9,7 +9,7 @@ import {
     type WorkerRpcEndpoint,
     type WorkerRpcServer,
 } from '../utils/communicationUtils';
-import { PluginAssetCatalogService } from './PluginAssetCatalogService';
+import { PluginRuntimeCatalogService } from './PluginRuntimeCatalogService';
 import { PluginSettingService } from './PluginSettingService';
 import { PluginStorageService } from './PluginStorageService';
 
@@ -17,7 +17,7 @@ const WORKER_RPC_CHANNEL = 'plugin-worker-runtime';
 
 interface WorkerSandboxServiceDeps {
     capabilityRegistry: CapabilityRegistry;
-    pluginAssetCatalogService: PluginAssetCatalogService;
+    pluginRuntimeCatalogService: PluginRuntimeCatalogService;
     pluginEventBus: PluginEventBus;
     pluginDisposable: PluginDisposable;
     pluginStorageService: PluginStorageService;
@@ -366,7 +366,7 @@ export class WorkerSandboxService {
         const existing = this.workers.get(pluginId);
         if (existing) return existing;
 
-        const manifest = this.deps.pluginAssetCatalogService.getPluginEntryById(pluginId);
+        const manifest = this.deps.pluginRuntimeCatalogService.getPluginEntryById(pluginId);
         if (!manifest) {
             throw new Error(`Plugin manifest not found: ${pluginId}`);
         }

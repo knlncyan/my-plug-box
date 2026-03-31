@@ -4,15 +4,13 @@ import type {
     ExecuteCommandPipelineOptions,
     PluginRuntimeSnapshot,
 } from '../../domain/runtime';
-import type { CommandMeta, PluginEntry } from '../../domain/protocol/plugin-catalog.protocol';
+import type { PluginEntry } from '../../domain/protocol/plugin-catalog.protocol';
 import { PluginDisposable } from '../PluginDisposable';
 import { PluginAssetCatalogService } from './PluginAssetCatalogService';
 import { WorkerSandboxService } from './WorkerSandboxService';
 import { activationEventMatches, isActivated, isDisabled } from '../utils/pluginUtils';
 
 type Listener = () => void;
-
-type SystemShortcutHandler = () => void | Promise<void>;
 
 interface PluginRuntimeServiceDeps {
     pluginAssetCatalogService: PluginAssetCatalogService;

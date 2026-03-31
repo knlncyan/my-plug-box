@@ -23,16 +23,6 @@ pub fn run() {
         .setup(|app| {
             // 1.1 创建管理器
             let manager = PluginManager::new();
-            // match scan_external_plugin_manifests() {
-            //     Ok(manifests) => {
-            //         if let Err(error) = register_external_manifests(&mut manager, &manifests) {
-            //             eprintln!("[plugin-index] startup register failed: {}", error);
-            //         }
-            //     }
-            //     Err(error) => {
-            //         eprintln!("[plugin-index] startup scan failed: {}", error);
-            //     }
-            // }
             // 1.2 交给 Tauri 管理
             app.manage(Mutex::new(manager));
             app.manage(state);

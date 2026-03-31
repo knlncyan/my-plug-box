@@ -56,7 +56,7 @@ export default () => {
         >
             {/* 窗口标题（可选） */}
             <img src="src/assets/tauri.svg" className="w-5 h-5 ml-2" />
-            <span className="ml-2 text-sm font-medium">Plug Box</span>
+            <span className="ml-2 text-sm font-medium">ModuDesk</span>
 
             {/* 窗口控制按钮 - 靠右 */}
             <div

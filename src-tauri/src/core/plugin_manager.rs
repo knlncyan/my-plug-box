@@ -29,28 +29,28 @@ impl PluginManager {
         }
     }
 
-    pub fn contains_plugin(&self, plugin_id: &str) -> bool {
-        self._plugins.contains_key(plugin_id)
-    }
+    // pub fn contains_plugin(&self, plugin_id: &str) -> bool {
+    //     self._plugins.contains_key(plugin_id)
+    // }
 
-    fn status_label(status: &PluginStatus) -> &'static str {
-        match status {
-            PluginStatus::Registered => "registered",
-            PluginStatus::Activating => "activating",
-            PluginStatus::Activated => "activated",
-            PluginStatus::Deactivating => "deactivating",
-            PluginStatus::Inactive => "inactive",
-            PluginStatus::Disabled => "disabled",
-            PluginStatus::Error(_) => "error",
-        }
-    }
+    // fn status_label(status: &PluginStatus) -> &'static str {
+    //     match status {
+    //         PluginStatus::Registered => "registered",
+    //         PluginStatus::Activating => "activating",
+    //         PluginStatus::Activated => "activated",
+    //         PluginStatus::Deactivating => "deactivating",
+    //         PluginStatus::Inactive => "inactive",
+    //         PluginStatus::Disabled => "disabled",
+    //         PluginStatus::Error(_) => "error",
+    //     }
+    // }
 
-    fn status_error(status: &PluginStatus) -> Option<String> {
-        match status {
-            PluginStatus::Error(message) => Some(message.clone()),
-            _ => None,
-        }
-    }
+    // fn status_error(status: &PluginStatus) -> Option<String> {
+    //     match status {
+    //         PluginStatus::Error(message) => Some(message.clone()),
+    //         _ => None,
+    //     }
+    // }
 
     fn activate_single(entry: &mut PluginEntry) -> Result<(), String> {
         if entry.status == PluginStatus::Disabled {
@@ -88,8 +88,8 @@ impl PluginManagerActivation for PluginManager {
                 println!("插件 '{}' 缺少必需的 view_url", dto.id);
                 continue;
             }
-            let module_url = dto.module_url.unwrap();
-            let view_url = dto.view_url.unwrap();
+            let module_url = dto.module_url.unwrap_or_default();
+            let view_url = dto.view_url.unwrap_or_default();
 
             let plugin_id = dto.id.clone(); // 这里还是需要 clone 一次作为 key
 
@@ -98,7 +98,6 @@ impl PluginManagerActivation for PluginManager {
                 id: it.id,
                 title: it.title,
                 plugin_id: plugin_id.clone(),
-                view_url: view_url,
                 props: it.props,
             });
 
@@ -128,6 +127,7 @@ impl PluginManagerActivation for PluginManager {
                 commands_meta,
                 status: PluginStatus::Registered,
                 module_url: module_url,
+                view_url: view_url,
             };
 
             self._plugins.insert(plugin_id, entry);

@@ -3,7 +3,7 @@
     PluginManagerActivation,
 };
 use std::sync::Mutex;
-use tauri::{command, State};
+use tauri::{command, AppHandle, State};
 
 fn lock_error<T>() -> ApiResponse<T> {
     ApiResponse::error("failed to acquire plugin manager lock".to_string())
@@ -12,9 +12,10 @@ fn lock_error<T>() -> ApiResponse<T> {
 /// 读取插件资源并注册插件
 #[command]
 pub fn refresh_external_plugins(
+    app: AppHandle,
     manager: State<'_, Mutex<PluginManager>>,
 ) -> ApiResponse<Vec<PluginEntry>> {
-    let manifests = match scan_external_plugin_manifests() {
+    let manifests = match scan_external_plugin_manifests(app) {
         Ok(data) => data,
         Err(error) => return ApiResponse::error(error),
     };

@@ -27,7 +27,6 @@ export interface ViewMeta {
     id: string;
     title: string;
     pluginId: string;
-    viewUrl: string;
     props: Record<string, unknown>;
 }
 
@@ -62,4 +61,5 @@ export interface PluginEntry {
     commandsMeta: CommandMeta[],
     status: PluginStatus,
     moduleUrl: string;
+    viewUrl: string;
 }

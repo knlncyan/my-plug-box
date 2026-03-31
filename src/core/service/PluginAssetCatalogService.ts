@@ -1,12 +1,9 @@
 ﻿import type { CommandMeta, PluginEntry } from '../../domain/protocol/plugin-catalog.protocol';
 import service from '../../api/plugin.service';
-import { resetPluginResources } from '../utils/pluginResourceLoader';
 
 /**
  * 插件资源目录服务（仅外部插件）：
  * 1) 通过后端刷新接口获取插件清单。
- * 2) 将 moduleUrl / viewUrl 注册到前端资源加载器。
- * 3) 提供启动一致性校验（manifest 与模块导出一致）。
  */
 export class PluginAssetCatalogService {
     private initialized = false;
@@ -44,7 +41,6 @@ export class PluginAssetCatalogService {
         this.externalManifestLoaded = false;
         this.pluginEntryById.clear();
         this.commandById.clear();
-        resetPluginResources();
         this.initialized = false;
         await this.ensureExternalManifestsLoaded(reload);
     }

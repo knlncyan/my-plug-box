@@ -7,4 +7,4 @@
 /gen/schemas
 
 # Local plugin persistence data (dev/runtime generated)
-/.plug-box-data/
+/data/

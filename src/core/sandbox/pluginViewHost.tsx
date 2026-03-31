@@ -11,6 +11,7 @@ import type {
 import type { CapabilityById, CapabilityContract } from '../../domain/capability';
 import type { PluginViewLocalShortcutKeydownPayload } from '../../domain/protocol/plugin-view-rpc.protocol';
 import { createWindowRpcClient } from '../utils/communicationUtils';
+import { importPluginAssetByUrl } from '../utils/pluginUtils';
 
 declare global {
     interface Window {
@@ -91,8 +92,6 @@ function isEditableTarget(target: EventTarget | null): boolean {
     const tag = target.tagName.toLowerCase();
     return tag === 'input' || tag === 'textarea' || tag === 'select';
 }
-
-const importByUrl = new Function('url', 'return import(url);') as (url: string) => Promise<{ default?: unknown }>;
 
 function createSandboxPluginApi(params: SandboxParams): PluginHostAPI {
     const rpcClient = createWindowRpcClient({
@@ -364,8 +363,8 @@ function App() {
                 if (!nextParams.viewUrl) {
                     throw new Error(`Component not found: ${nextParams.viewId} (${nextParams.pluginId})`);
                 }
-
-                const loaded = await importByUrl(nextParams.viewUrl);
+                console.log('传入的视图url', nextParams)
+                const loaded = await importPluginAssetByUrl(nextParams.viewUrl);
                 if (!loaded.default) {
                     throw new Error(`Component default export missing: ${nextParams.viewId}`);
                 }

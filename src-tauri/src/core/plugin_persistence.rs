@@ -5,52 +5,67 @@
 use serde_json::{Map, Value};
 use std::fs;
 use std::path::{Path, PathBuf};
+use tauri::path::BaseDirectory;
+use tauri::{AppHandle, Manager};
 
 /// 读取整个settings。
-pub fn read_all_plugin_settings() -> Result<Map<String, Value>, String> {
-    let path = settings_file_path()?;
+pub fn read_all_plugin_settings(app: AppHandle) -> Result<Map<String, Value>, String> {
+    let path = settings_file_path(app)?;
     read_json_object(&path)
 }
 
 /// 写入某个插件单个 settings 项。
-pub fn write_plugin_setting(plugin_id: &str, key: &str, value: Value) -> Result<(), String> {
+pub fn write_plugin_setting(
+    plugin_id: &str,
+    key: &str,
+    value: Value,
+    app: AppHandle,
+) -> Result<(), String> {
     let scoped_key = format!("{}.{}", plugin_id, key);
-    let path = settings_file_path()?;
+    let path = settings_file_path(app)?;
     let mut data = read_json_object(&path)?;
     data.insert(scoped_key, value);
     write_json_object(&path, &data)
 }
 
 /// 读取某个插件 storage 快照。
-pub fn read_plugin_storage_snapshot(plugin_id: &str) -> Result<Map<String, Value>, String> {
-    let path = plugin_storage_file_path(plugin_id)?;
+pub fn read_plugin_storage_snapshot(
+    plugin_id: &str,
+    app: AppHandle,
+) -> Result<Map<String, Value>, String> {
+    let path = plugin_storage_file_path(plugin_id, app)?;
     read_json_object(&path)
 }
 
 /// 写入某个插件 storage 键值。
-pub fn write_plugin_storage_value(plugin_id: &str, key: &str, value: Value) -> Result<(), String> {
-    let path = plugin_storage_file_path(plugin_id)?;
+pub fn write_plugin_storage_value(
+    plugin_id: &str,
+    key: &str,
+    value: Value,
+    app: AppHandle,
+) -> Result<(), String> {
+    let path = plugin_storage_file_path(plugin_id, app)?;
     let mut data = read_json_object(&path)?;
     data.insert(key.to_string(), value);
     write_json_object(&path, &data)
 }
 
-fn persistence_root() -> Result<PathBuf, String> {
-    let mut root = std::env::current_dir()
-        .map_err(|error| format!("failed to resolve current dir: {}", error))?;
-    root.push(".plug-box-data");
-    root.push("plugin-persistence");
-    Ok(root)
+fn persistence_root(app: AppHandle) -> Result<PathBuf, String> {
+    let seeting_root = app
+        .path()
+        .resolve(".plug_data", BaseDirectory::AppData)
+        .map_err(|e| e.to_string())?;
+    Ok(seeting_root)
 }
 
-fn settings_file_path() -> Result<PathBuf, String> {
-    let mut path = persistence_root()?;
+fn settings_file_path(app: AppHandle) -> Result<PathBuf, String> {
+    let mut path = persistence_root(app)?;
     path.push("settings.json");
     Ok(path)
 }
 
-fn plugin_storage_file_path(plugin_id: &str) -> Result<PathBuf, String> {
-    let mut path = persistence_root()?;
+fn plugin_storage_file_path(plugin_id: &str, app: AppHandle) -> Result<PathBuf, String> {
+    let mut path = persistence_root(app)?;
     path.push("storage");
     path.push(format!("{}.json", sanitize_plugin_id(plugin_id)));
     Ok(path)

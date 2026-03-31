@@ -9,6 +9,7 @@ import type {
     PluginModule,
     CommandExecutionContext,
 } from '../../domain/protocol/plugin-module.protocol';
+import { importPluginAssetByUrl } from '../utils/pluginUtils';
 
 const WORKER_RPC_CHANNEL = 'plugin-worker-runtime';
 
@@ -49,8 +50,6 @@ const rpcServer = createWorkerRpcServer({
     endpoint,
 });
 
-const importByUrl = new Function('url', 'return import(url);') as (url: string) => Promise<{ default?: unknown }>;
-
 async function ensurePluginModule(): Promise<PluginModule> {
     if (pluginModule) return pluginModule;
     if (!pluginId) {
@@ -59,8 +58,8 @@ async function ensurePluginModule(): Promise<PluginModule> {
     if (!moduleUrl) {
         throw new Error(`Worker not initialized: missing moduleUrl for ${pluginId}`);
     }
-
-    const loaded = await importByUrl(moduleUrl);
+    console.log('模块url', moduleUrl)
+    const loaded = await importPluginAssetByUrl(moduleUrl);
     if (!loaded.default) {
         throw new Error(`Plugin module default export missing: ${moduleUrl}`);
     }

@@ -8,8 +8,8 @@ export default () => {
     const { loading, ready, error, plugins, activeViewPluginId } = useCoreRuntime();
     const mainViewContent = useAppViewStore(state => state.mainViewContent);
 
-    const activeView = useMemo(
-        () => plugins.find((plugin) => plugin.id === activeViewPluginId)?.view ?? null,
+    const activatedPlugin = useMemo(
+        () => plugins.find((plugin) => plugin.pluginId === activeViewPluginId) ?? null,
         [plugins, activeViewPluginId]
     );
 
@@ -25,8 +25,8 @@ export default () => {
         <>
             {!!mainViewContent
                 ? mainViewContent
-                : activeView
-                    ? <PluginViewLoader view={activeView} />
+                : activatedPlugin?.viewMeta
+                    ? <PluginViewLoader plugin={activatedPlugin} />
                     : <div className="flex h-full items-center justify-center text-sm text-neutral-500">
                         No view is available.
                     </div>

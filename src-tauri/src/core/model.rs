@@ -9,8 +9,6 @@ pub struct ViewMeta {
     pub title: String, // 显示标题
     #[serde(default, rename = "pluginId")]
     pub plugin_id: String, // 归属插件 ID
-    #[serde(default, rename = "viewUrl")]
-    pub view_url: String, // 视图资源url
     pub props: serde_json::Value, // 传递给组件的初始参数
 }
 
@@ -94,6 +92,9 @@ pub struct PluginEntry {
     pub commands_meta: Vec<CommandMeta>,
     // 运行状态。
     pub status: PluginStatus,
+    // 视图资源url
+    #[serde(default, rename = "viewUrl")]
+    pub view_url: String,
     // 主模块url
     #[serde(default, rename = "moduleUrl")]
     pub module_url: String,

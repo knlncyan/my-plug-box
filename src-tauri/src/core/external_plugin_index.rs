@@ -1,8 +1,9 @@
-use crate::core::{CommandMeta, PluginManager, PluginManagerActivation, PluginManifest, ViewMeta};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::fs;
 use std::path::{Path, PathBuf};
+use tauri::path::BaseDirectory;
+use tauri::{AppHandle, Manager};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ExternalPluginViewManifestDto {
@@ -42,28 +43,13 @@ pub struct ExternalPluginManifestDto {
     pub view_url: Option<String>,
 }
 
-fn resolve_external_plugins_root() -> Result<PathBuf, String> {
-    let cwd = std::env::current_dir()
-        .map_err(|error| format!("failed to resolve current dir: {}", error))?;
-
-    let candidates = vec![
-        cwd.join("plugins"),
-        cwd.join("public").join("plugins"),
-        cwd.parent()
-            .map(|it| it.join("plugins"))
-            .unwrap_or_else(|| cwd.join("plugins")),
-        cwd.parent()
-            .map(|it| it.join("public").join("plugins"))
-            .unwrap_or_else(|| cwd.join("public").join("plugins")),
-    ];
-
-    for root in candidates {
-        if root.exists() {
-            return Ok(root);
-        }
-    }
-
-    Ok(cwd.join("plugins"))
+fn resolve_external_plugins_root(app: AppHandle) -> Result<PathBuf, String> {
+    let root = app
+        .path()
+        .resolve("plugins", BaseDirectory::AppData)
+        .map_err(|e| e.to_string())?;
+    println!("root位置: {}", root.display());
+    Ok(root)
 }
 
 fn read_manifest_file(path: &Path) -> Result<ExternalPluginManifestDto, String> {
@@ -89,17 +75,13 @@ fn normalize_manifest(
         manifest.view_url = Some(format!("/plugins/{}/view/index.js", folder_name));
     }
 
-    // if let Some(view) = manifest.view.as_mut() {
-    //     if view.plugin_id.trim().is_empty() {
-    //         view.plugin_id = manifest.id.clone();
-    //     }
-    // }
-
     manifest
 }
 
-pub fn scan_external_plugin_manifests() -> Result<Vec<ExternalPluginManifestDto>, String> {
-    let root = resolve_external_plugins_root()?;
+pub fn scan_external_plugin_manifests(
+    app: AppHandle,
+) -> Result<Vec<ExternalPluginManifestDto>, String> {
+    let root = resolve_external_plugins_root(app)?;
     if !root.exists() {
         return Ok(Vec::new());
     }

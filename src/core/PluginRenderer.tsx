@@ -3,15 +3,14 @@ import { container, coreRuntime } from '.';
 import { CommandKeybindingService } from './service/CommandKeybindingService';
 import { WorkerSandboxService } from './service/WorkerSandboxService';
 import { createWindowRpcServer } from './utils/communicationUtils';
-import { getPluginViewUrl } from './utils/pluginResourceLoader';
-import type { PluginViewManifest } from '../domain/protocol/plugin-catalog.protocol';
+import type { PluginEntry } from '../domain/protocol/plugin-catalog.protocol';
 import type {
     PluginViewInvokeHostMethodPayload,
     PluginViewLocalShortcutKeydownPayload,
 } from '../domain/protocol/plugin-view-rpc.protocol';
 
 interface Props {
-    view: PluginViewManifest;
+    plugin: PluginEntry;
 }
 
 interface ErrorBoundaryProps {
@@ -84,13 +83,14 @@ function asLocalShortcutPayload(value: unknown): PluginViewLocalShortcutKeydownP
     };
 }
 
-function buildSandboxViewUrl(view: PluginViewManifest): string {
+function buildSandboxViewUrl(plugin: PluginEntry): string {
+    const view = plugin.viewMeta!!;
     const url = new URL('/plugin-view-sandbox.html', window.location.origin);
     url.searchParams.set('viewId', view.id);
     url.searchParams.set('pluginId', view.pluginId);
     url.searchParams.set('props', JSON.stringify(view.props ?? {}));
 
-    const viewUrl = getPluginViewUrl(view.pluginId);
+    const viewUrl = plugin.viewUrl;
     if (viewUrl) {
         url.searchParams.set('viewUrl', viewUrl);
     }
@@ -98,13 +98,13 @@ function buildSandboxViewUrl(view: PluginViewManifest): string {
     return url.toString();
 }
 
-function PluginSandboxFrame({ view }: Props) {
+function PluginSandboxFrame({ plugin }: Props) {
     const iframeRef = useRef<HTMLIFrameElement | null>(null);
     const [frameError, setFrameError] = useState<string | null>(null);
 
     const sandboxUrl = useMemo(
-        () => buildSandboxViewUrl(view),
-        [view.id, view.pluginId, JSON.stringify(view.props ?? {})]
+        () => buildSandboxViewUrl(plugin),
+        [plugin.pluginId, JSON.stringify(plugin?.viewMeta?.props ?? {})]
     );
 
     useEffect(() => {
@@ -120,7 +120,7 @@ function PluginSandboxFrame({ view }: Props) {
 
         const unregs = [
             rpcServer.register('refreshExternalPlugins', async () => {
-                await coreRuntime.refreshExternalPlugins();
+                await coreRuntime.refresh();
                 return null;
             }),
             rpcServer.register('invokeHostMethod', (payload) => {
@@ -128,7 +128,7 @@ function PluginSandboxFrame({ view }: Props) {
                 if (typeof data.method !== 'string' || data.method.length === 0) {
                     throw new Error('runtime bridge invokeHostMethod missing method');
                 }
-                return workerSandboxService.invokeHostMethod(view.pluginId, data.method, data.params);
+                return workerSandboxService.invokeHostMethod(plugin.pluginId, data.method, data.params);
             }),
             rpcServer.register('handleLocalShortcutKeydown', (payload) => {
                 const keydownPayload = asLocalShortcutPayload(payload);
@@ -142,7 +142,7 @@ function PluginSandboxFrame({ view }: Props) {
         unsubscribeSubscriptionPush = workerSandboxService.onSubscriptionPush((push) => {
             const targetWindow = getTargetWindow();
             if (!targetWindow) return;
-            if (push.pluginId !== view.pluginId) return;
+            if (push.pluginId !== plugin.pluginId) return;
 
             rpcServer.emit(
                 'capability.subscription',
@@ -164,20 +164,20 @@ function PluginSandboxFrame({ view }: Props) {
             }
             rpcServer.dispose();
         };
-    }, [sandboxUrl, view.pluginId]);
+    }, [sandboxUrl, plugin.pluginId]);
 
     return (
         <div className="h-full w-full">
             {frameError ? (
                 <div className="p-4 text-sm text-red-700">
-                    Plugin sandbox failed ({view.id}): {frameError}
+                    Plugin sandbox failed ({plugin.pluginId}): {frameError}
                 </div>
             ) : null}
             <iframe
                 key={sandboxUrl}
                 ref={iframeRef}
                 src={sandboxUrl}
-                title={`plugin-view-${view.id}`}
+                title={`plugin-view-${plugin.viewMeta?.id ?? 'none'}`}
                 sandbox="allow-scripts allow-forms allow-same-origin"
                 className="h-full w-full border-0"
                 onLoad={() => setFrameError(null)}
@@ -187,10 +187,10 @@ function PluginSandboxFrame({ view }: Props) {
     );
 }
 
-export function PluginViewLoader({ view }: Props) {
+export function PluginViewLoader({ plugin }: Props) {
     return (
-        <PluginViewErrorBoundary pluginId={view.pluginId} viewId={view.id}>
-            <PluginSandboxFrame view={view} />
+        <PluginViewErrorBoundary pluginId={plugin.pluginId} viewId={plugin?.viewMeta?.id ?? 'none'}>
+            <PluginSandboxFrame plugin={plugin} />
         </PluginViewErrorBoundary>
     );
 }

@@ -25,6 +25,7 @@ declare global {
 }
 
 let pluginId = '';
+// 内部的moduleUrl使用提前解析好的完整路径
 let moduleUrl = '';
 let pluginModule: PluginModule | null = null;
 let activated = false;
@@ -59,7 +60,7 @@ async function ensurePluginModule(): Promise<PluginModule> {
         throw new Error(`Worker not initialized: missing moduleUrl for ${pluginId}`);
     }
     console.log('模块url', moduleUrl)
-    const loaded = await importPluginAssetByUrl(moduleUrl);
+    const loaded = await importPluginAssetByUrl(moduleUrl, true);
     if (!loaded.default) {
         throw new Error(`Plugin module default export missing: ${moduleUrl}`);
     }

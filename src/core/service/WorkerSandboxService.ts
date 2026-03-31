@@ -9,6 +9,7 @@ import {
     type WorkerRpcEndpoint,
     type WorkerRpcServer,
 } from '../utils/communicationUtils';
+import { resolvePluginAssetImportUrl } from '../utils/pluginUtils';
 import { PluginRuntimeCatalogService } from './PluginRuntimeCatalogService';
 import { PluginSettingService } from './PluginSettingService';
 import { PluginStorageService } from './PluginStorageService';
@@ -412,9 +413,10 @@ export class WorkerSandboxService {
         this.workers.set(pluginId, record);
 
         try {
+            const moduleImportUrl = await resolvePluginAssetImportUrl(manifest.moduleUrl);
             await this.callWorker(record, 'init', {
                 pluginId,
-                moduleUrl: manifest.moduleUrl,
+                moduleUrl: moduleImportUrl,
             });
             return record;
         } catch (error) {

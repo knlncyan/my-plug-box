@@ -3,12 +3,18 @@ import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
 import { spawnSync } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-const TOOL_ROOT = path.resolve(__dirname, '..');
-const REPO_ROOT = path.resolve(TOOL_ROOT, '..', '..');
+const scriptDir =
+  typeof __dirname === 'string'
+    ? __dirname
+    : (process.argv[1] ? path.dirname(path.resolve(process.argv[1])) : process.cwd());
+const SDK_TYPES_BUNDLE_PATH = path.resolve(scriptDir, 'modudesk-sdk-types.json');
+const EMBEDDED_SDK_TYPES_BUNDLE =
+  typeof globalThis !== 'undefined'
+  && globalThis.__MODUDESK_SDK_TYPES_BUNDLE__
+  && typeof globalThis.__MODUDESK_SDK_TYPES_BUNDLE__ === 'object'
+    ? globalThis.__MODUDESK_SDK_TYPES_BUNDLE__
+    : null;
 
 function parseArgs(argv) {
   const args = [...argv];
@@ -63,12 +69,36 @@ function normalizePluginId(raw) {
   return pluginId;
 }
 
-function readRepoFile(relativePath) {
-  const absolutePath = path.resolve(REPO_ROOT, relativePath);
-  if (!fs.existsSync(absolutePath)) {
-    throw new Error(`[modudesk-plugin] source file not found: ${absolutePath}`);
+function readBundledSdkTypes() {
+  if (
+    EMBEDDED_SDK_TYPES_BUNDLE
+    && typeof EMBEDDED_SDK_TYPES_BUNDLE.capability === 'string'
+    && typeof EMBEDDED_SDK_TYPES_BUNDLE.api === 'string'
+    && typeof EMBEDDED_SDK_TYPES_BUNDLE.pluginModule === 'string'
+  ) {
+    return EMBEDDED_SDK_TYPES_BUNDLE;
   }
-  return fs.readFileSync(absolutePath, 'utf8');
+
+  if (!fs.existsSync(SDK_TYPES_BUNDLE_PATH)) {
+    throw new Error(
+      `[modudesk-plugin] sdk type bundle not found: ${SDK_TYPES_BUNDLE_PATH}\n` +
+      'Please run: node tools/plugin-devtool/scripts/update-sdk-types.mjs'
+    );
+  }
+
+  const raw = fs.readFileSync(SDK_TYPES_BUNDLE_PATH, 'utf8');
+  const parsed = JSON.parse(raw);
+  if (
+    !parsed
+    || typeof parsed !== 'object'
+    || typeof parsed.capability !== 'string'
+    || typeof parsed.api !== 'string'
+    || typeof parsed.pluginModule !== 'string'
+  ) {
+    throw new Error(`[modudesk-plugin] invalid sdk type bundle: ${SDK_TYPES_BUNDLE_PATH}`);
+  }
+
+  return parsed;
 }
 
 function sdkRuntimeIndexTs() {
@@ -202,10 +232,10 @@ function syncSdkTypes(targetDir) {
   const sdkTypesDir = path.join(sdkDir, 'types');
   ensureDir(sdkTypesDir);
 
-  const capabilitySource = readRepoFile('src/domain/capability.ts');
-  const apiSource = readRepoFile('src/domain/api.ts');
-  const pluginModuleSource = readRepoFile('src/domain/protocol/plugin-module.protocol.ts')
-    .replace(`from '../api'`, `from './api'`);
+  const bundle = readBundledSdkTypes();
+  const capabilitySource = bundle.capability;
+  const apiSource = bundle.api;
+  const pluginModuleSource = bundle.pluginModule;
 
   writeFile(path.join(sdkTypesDir, 'capability.ts'), capabilitySource);
   writeFile(path.join(sdkTypesDir, 'api.ts'), apiSource);
@@ -547,7 +577,7 @@ function createProject(targetDir, framework, pluginIdOption) {
   console.info('  1) cd ' + targetDir);
   console.info('  2) pnpm install');
   console.info('  3) pnpm build');
-  console.info('  4) node ../tools/plugin-devtool/bin/modudesk-plugin.mjs sync-sdk .   # 宿主类型变更后可手动刷新');
+  console.info('  4) node ../tools/plugin-devtool/bin/modudesk-plugin.mjs sync-sdk .   # optional');
   console.info('  5) copy dist/<pluginId> to app/public/plugins/<pluginId>');
 }
 
@@ -598,7 +628,9 @@ async function main() {
       throw new Error('Missing project directory');
     }
 
-    const framework = String(options.framework ?? 'react').toLowerCase();
+    const framework = String(
+      options.framework ?? (options.vue ? 'vue' : 'react')
+    ).toLowerCase();
     if (framework !== 'react' && framework !== 'vue') {
       throw new Error('framework must be react or vue');
     }

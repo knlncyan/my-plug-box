@@ -1,0 +1,24 @@
+{
+  "name": "@modudesk/plugin-devtool",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "modudesk-plugin": "./bin/modudesk-plugin.mjs"
+  },
+  "scripts": {
+    "update:sdk-types": "node ./scripts/update-sdk-types.mjs",
+    "build:executables": "node ./scripts/build-executables.mjs",
+    "build:executables:all": "node ./scripts/build-executables.mjs --targets=windows,linux,macos"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.4",
+    "pkg": "^5.8.1"
+  },
+  "pkg": {
+    "assets": [
+      "bin/modudesk-sdk-types.json",
+      "bin/modudesk-plugin.mjs"
+    ]
+  }
+}

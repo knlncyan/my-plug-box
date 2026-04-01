@@ -1,13 +1,9 @@
 ﻿import { Component, type ErrorInfo, type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
-import { container, coreRuntime } from '.';
-import { CommandKeybindingService } from './service/CommandKeybindingService';
+import { container } from '.';
 import { WorkerSandboxService } from './service/WorkerSandboxService';
 import { createWindowRpcServer } from './utils/communicationUtils';
 import type { PluginEntry } from '../domain/protocol/plugin-catalog.protocol';
-import type {
-    PluginViewInvokeHostMethodPayload,
-    PluginViewLocalShortcutKeydownPayload,
-} from '../domain/protocol/plugin-view-rpc.protocol';
+import type { PluginViewInvokeHostMethodPayload } from '../domain/protocol/plugin-view-rpc.protocol';
 
 interface Props {
     plugin: PluginEntry;
@@ -24,7 +20,6 @@ interface ErrorBoundaryState {
 }
 
 const workerSandboxService = container.resolve(WorkerSandboxService);
-const commandKeybindingService = container.resolve(CommandKeybindingService);
 
 class PluginViewErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
     state: ErrorBoundaryState = { error: null };
@@ -64,25 +59,6 @@ function asRecord(value: unknown): Record<string, unknown> {
     return value as Record<string, unknown>;
 }
 
-function asLocalShortcutPayload(value: unknown): PluginViewLocalShortcutKeydownPayload | null {
-    const data = asRecord(value);
-    if (typeof data.code !== 'string') return null;
-
-    const toBool = (key: string): boolean => data[key] === true;
-
-    return {
-        code: data.code,
-        ctrlKey: toBool('ctrlKey'),
-        altKey: toBool('altKey'),
-        shiftKey: toBool('shiftKey'),
-        metaKey: toBool('metaKey'),
-        repeat: toBool('repeat'),
-        isComposing: toBool('isComposing'),
-        defaultPrevented: toBool('defaultPrevented'),
-        targetIsEditable: toBool('targetIsEditable'),
-    };
-}
-
 function buildSandboxViewUrl(plugin: PluginEntry): string {
     const view = plugin.viewMeta!!;
     const url = new URL('/plugin-view-sandbox.html', window.location.origin);
@@ -119,10 +95,6 @@ function PluginSandboxFrame({ plugin }: Props) {
         });
 
         const unregs = [
-            rpcServer.register('refreshExternalPlugins', async () => {
-                await coreRuntime.refresh();
-                return null;
-            }),
             rpcServer.register('invokeHostMethod', (payload) => {
                 const data = asRecord(payload) as unknown as PluginViewInvokeHostMethodPayload;
                 if (typeof data.method !== 'string' || data.method.length === 0) {
@@ -130,18 +102,12 @@ function PluginSandboxFrame({ plugin }: Props) {
                 }
                 return workerSandboxService.invokeHostMethod(plugin.pluginId, data.method, data.params);
             }),
-            rpcServer.register('handleLocalShortcutKeydown', (payload) => {
-                const keydownPayload = asLocalShortcutPayload(payload);
-                if (!keydownPayload) {
-                    return false;
-                }
-                return commandKeybindingService.handleLocalShortcutKeydown(keydownPayload);
-            }),
         ];
 
         unsubscribeSubscriptionPush = workerSandboxService.onSubscriptionPush((push) => {
             const targetWindow = getTargetWindow();
             if (!targetWindow) return;
+            // 过滤：插件的事件只允许自己的视图订阅
             if (push.pluginId !== plugin.pluginId) return;
 
             rpcServer.emit(

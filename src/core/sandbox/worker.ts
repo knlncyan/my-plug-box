@@ -9,7 +9,7 @@ import type {
     PluginModule,
     CommandExecutionContext,
 } from '../../domain/protocol/plugin-module.protocol';
-import { importPluginAssetByUrl } from '../utils/pluginUtils';
+import { importByUrl } from '../utils/pluginUtils';
 
 const WORKER_RPC_CHANNEL = 'plugin-worker-runtime';
 
@@ -51,6 +51,7 @@ const rpcServer = createWorkerRpcServer({
     endpoint,
 });
 
+// 确保主模块index.js存在并加载
 async function ensurePluginModule(): Promise<PluginModule> {
     if (pluginModule) return pluginModule;
     if (!pluginId) {
@@ -59,8 +60,7 @@ async function ensurePluginModule(): Promise<PluginModule> {
     if (!moduleUrl) {
         throw new Error(`Worker not initialized: missing moduleUrl for ${pluginId}`);
     }
-    console.log('模块url', moduleUrl)
-    const loaded = await importPluginAssetByUrl(moduleUrl, true);
+    const loaded = await importByUrl(moduleUrl);
     if (!loaded.default) {
         throw new Error(`Plugin module default export missing: ${moduleUrl}`);
     }
@@ -123,39 +123,17 @@ async function releaseEventSubscriptionIfUnused(eventName: string): Promise<void
     await callHost('events.unsubscribe', subscriptionId);
 }
 
-function emitSettingValue(key: string, value: unknown): void {
-    const watchers = settingWatchers.get(key);
-    if (!watchers) return;
-
-    for (const watcher of watchers) {
-        try {
-            watcher(value);
-        } catch (error) {
-            console.error(`[plugin-worker] settings.onChange callback failed: ${key}`, error);
-        }
-    }
-}
-
-function emitEventPayload(eventName: string, payload: unknown): void {
-    const watchers = eventWatchers.get(eventName);
-    if (!watchers) return;
-
-    for (const watcher of watchers) {
-        try {
-            watcher(payload);
-        } catch (error) {
-            console.error(`[plugin-worker] events.on callback failed: ${eventName}`, error);
-        }
-    }
-}
-
+// 创建一个代理对象，这里使用代理对象的意义是自动获取到methodName，否则就要写callHost(`${capabilityId}`, 'open')
+// 其他能力需要一些特殊实现，所以不走代理对象
 function createDynamicCapabilityProxy(capabilityId: string): CapabilityContract {
     const existing = capabilityCache.get(capabilityId);
     if (existing) return existing;
 
+    // 一个空对象的代理对象，只要访问属性就必定触发get陷阱
     const proxy = new Proxy(
         {},
         {
+            // 空对象_target自然无意义，也不需要使用到
             get: (_target, methodName) => {
                 if (typeof methodName !== 'string') return undefined;
                 return (...args: unknown[]) =>
@@ -287,30 +265,6 @@ async function deactivatePlugin(): Promise<void> {
     activated = false;
 }
 
-function handleCapabilitySubscription(payload: unknown): void {
-    const data = payload as { subscriptionId?: unknown; data?: unknown };
-    if (!data || typeof data !== 'object') return;
-    if (typeof data.subscriptionId !== 'string') return;
-
-    for (const [key, subscriptionId] of settingSubscriptionByKey.entries()) {
-        if (subscriptionId === data.subscriptionId) {
-            emitSettingValue(key, data.data);
-            return;
-        }
-    }
-
-    for (const [eventName, subscriptionId] of eventSubscriptionByName.entries()) {
-        if (subscriptionId === data.subscriptionId) {
-            emitEventPayload(eventName, data.data);
-            return;
-        }
-    }
-}
-
-rpcClient.on('capability.subscription', (payload) => {
-    handleCapabilitySubscription(payload);
-});
-
 rpcServer.register('init', async (payload) => {
     const data = payload as { pluginId?: unknown; moduleUrl?: unknown };
     if (typeof data?.pluginId !== 'string' || data.pluginId.length === 0) {
@@ -358,4 +312,56 @@ rpcServer.register('executeCommand', async (payload) => {
         data.args,
         Array.isArray(data.trace) ? (data.trace as string[]) : []
     );
+});
+
+// =========================================== 上面是worker service的方法，下面是 worker client的方法 ===============================================
+
+function emitSettingValue(key: string, value: unknown): void {
+    const watchers = settingWatchers.get(key);
+    if (!watchers) return;
+
+    for (const watcher of watchers) {
+        try {
+            watcher(value);
+        } catch (error) {
+            console.error(`[plugin-worker] settings.onChange callback failed: ${key}`, error);
+        }
+    }
+}
+
+function emitEventPayload(eventName: string, payload: unknown): void {
+    const watchers = eventWatchers.get(eventName);
+    if (!watchers) return;
+
+    for (const watcher of watchers) {
+        try {
+            watcher(payload);
+        } catch (error) {
+            console.error(`[plugin-worker] events.on callback failed: ${eventName}`, error);
+        }
+    }
+}
+
+function handleCapabilitySubscription(payload: unknown): void {
+    const data = payload as { subscriptionId?: unknown; data?: unknown };
+    if (!data || typeof data !== 'object') return;
+    if (typeof data.subscriptionId !== 'string') return;
+
+    for (const [key, subscriptionId] of settingSubscriptionByKey.entries()) {
+        if (subscriptionId === data.subscriptionId) {
+            emitSettingValue(key, data.data);
+            return;
+        }
+    }
+
+    for (const [eventName, subscriptionId] of eventSubscriptionByName.entries()) {
+        if (subscriptionId === data.subscriptionId) {
+            emitEventPayload(eventName, data.data);
+            return;
+        }
+    }
+}
+
+rpcClient.on('capability.subscription', (payload) => {
+    handleCapabilitySubscription(payload);
 });

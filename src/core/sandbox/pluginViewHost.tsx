@@ -9,9 +9,8 @@ import type {
     SettingsCapability,
 } from '../../domain/api';
 import type { CapabilityById, CapabilityContract } from '../../domain/capability';
-import type { PluginViewLocalShortcutKeydownPayload } from '../../domain/protocol/plugin-view-rpc.protocol';
 import { createWindowRpcClient } from '../utils/communicationUtils';
-import { importPluginAssetByUrl } from '../utils/pluginUtils';
+import { importByUrl } from '../utils/pluginUtils';
 
 declare global {
     interface Window {
@@ -85,14 +84,6 @@ function asRecord(value: unknown): Record<string, unknown> {
     return value as Record<string, unknown>;
 }
 
-function isEditableTarget(target: EventTarget | null): boolean {
-    if (!(target instanceof HTMLElement)) return false;
-    if (target.isContentEditable) return true;
-
-    const tag = target.tagName.toLowerCase();
-    return tag === 'input' || tag === 'textarea' || tag === 'select';
-}
-
 function createSandboxPluginApi(params: SandboxParams): PluginHostAPI {
     const rpcClient = createWindowRpcClient({
         channel: 'plugin-view-runtime',
@@ -145,11 +136,6 @@ function createSandboxPluginApi(params: SandboxParams): PluginHostAPI {
     });
 
     async function call<T = unknown>(method: string, paramsPayload?: unknown): Promise<T> {
-        if (method === 'runtime.refreshExternalPlugins') {
-            await rpcClient.call('refreshExternalPlugins');
-            return null as T;
-        }
-
         return rpcClient.call<T>('invokeHostMethod', {
             method,
             params: paramsPayload,
@@ -214,32 +200,6 @@ function createSandboxPluginApi(params: SandboxParams): PluginHostAPI {
         return proxy;
     }
 
-    const onWindowKeydown = (event: KeyboardEvent): void => {
-        const payload: PluginViewLocalShortcutKeydownPayload = {
-            code: event.code,
-            ctrlKey: event.ctrlKey,
-            altKey: event.altKey,
-            shiftKey: event.shiftKey,
-            metaKey: event.metaKey,
-            repeat: event.repeat,
-            isComposing: event.isComposing,
-            defaultPrevented: event.defaultPrevented,
-            targetIsEditable: isEditableTarget(event.target),
-        };
-
-        void rpcClient
-            .call<boolean>('handleLocalShortcutKeydown', payload, 2_000)
-            .then((handled) => {
-                if (!handled) return;
-                event.preventDefault();
-                event.stopPropagation();
-            })
-            .catch(() => {
-                // Ignore rpc errors while iframe/host reconnects.
-            });
-    };
-
-    window.addEventListener('keydown', onWindowKeydown, true);
     const localCapabilityFactories: Record<string, () => CapabilityContract> = {
         settings: () => {
             const settings: SettingsCapability = {
@@ -305,7 +265,6 @@ function createSandboxPluginApi(params: SandboxParams): PluginHostAPI {
         'beforeunload',
         () => {
             disposeSubscriptionListener();
-            window.removeEventListener('keydown', onWindowKeydown, true);
 
             for (const subscriptionId of settingSubscriptionByKey.values()) {
                 void call('settings.unsubscribe', subscriptionId);
@@ -363,8 +322,7 @@ function App() {
                 if (!nextParams.viewUrl) {
                     throw new Error(`Component not found: ${nextParams.viewId} (${nextParams.pluginId})`);
                 }
-                console.log('传入的视图url', nextParams)
-                const loaded = await importPluginAssetByUrl(nextParams.viewUrl);
+                const loaded = await importByUrl(nextParams.viewUrl);
                 if (!loaded.default) {
                     throw new Error(`Component default export missing: ${nextParams.viewId}`);
                 }

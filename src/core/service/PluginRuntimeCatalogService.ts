@@ -21,7 +21,10 @@ export class PluginRuntimeCatalogService {
         this.initialized = true;
     }
 
-    getAllPluginEntry(): PluginEntry[] {
+    async getAllPluginEntry(refresh: boolean = false): Promise<PluginEntry[]> {
+        if (refresh) {
+            await this.refreshFromBackend(false);
+        }
         return Array.from(this.pluginEntryById.values());
     }
 
@@ -41,7 +44,6 @@ export class PluginRuntimeCatalogService {
         this.externalManifestLoaded = false;
         this.pluginEntryById.clear();
         this.commandById.clear();
-        this.initialized = false;
         await this.ensureExternalManifestsLoaded(reload);
     }
 

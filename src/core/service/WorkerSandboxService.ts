@@ -9,7 +9,6 @@ import {
     type WorkerRpcEndpoint,
     type WorkerRpcServer,
 } from '../utils/communicationUtils';
-import { resolvePluginAssetImportUrl } from '../utils/pluginUtils';
 import { PluginRuntimeCatalogService } from './PluginRuntimeCatalogService';
 import { PluginSettingService } from './PluginSettingService';
 import { PluginStorageService } from './PluginStorageService';
@@ -60,8 +59,15 @@ export interface CapabilitySubscriptionPush {
     data: unknown;
 }
 
-/**
- * Worker 濞屾瑧顔堥張宥呭閿? * 1) 缂佺喍绔村▔銊ュ斀鐎瑰じ瀵岄懗钘夊閵? * 2) 缂佺喍绔存担璺ㄦ暏 `閼宠棄濮?閺傝纭禶 鐠侯垳鏁遍懗钘夊鐠嬪啰鏁ら妴? * 3) 缂佺喍绔存担璺ㄦ暏閺嶅洤鍣?RPC 閸楀繗顔呴崪?Worker 闁矮淇婇妴? */
+// 1.Host -> Worker
+//     Host 用 rpcClient.call('init'|'activate'|'executeCommand')
+//     Worker 用 rpcServer.register(...) 接这些请求
+// 2.Worker -> Host
+//     Worker 用 rpcClient.call('invokeHostMethod')
+//     Host 用 rpcServer.register('invokeHostMethod', ...) 处理
+// 3.订阅推送（事件）
+//     Host rpcServer.emit('capability.subscription')
+//     Worker rpcClient.on('capability.subscription')
 export class WorkerSandboxService {
     private readonly workers = new Map<string, WorkerSessionRecord>();
     private readonly settingSubscriptions = new Map<string, SettingSubscriptionRecord>();
@@ -72,6 +78,9 @@ export class WorkerSandboxService {
     private commandExecutor: CommandExecutor | null = null;
     private viewActivator: ((viewId: string) => void) | null = null;
 
+    /**
+     * 构造函数：注册内置能力、挂载全局清理、桥接设置变更事件。
+     */
     constructor(private readonly deps: WorkerSandboxServiceDeps) {
         this.registerBuiltinCapabilities();
 
@@ -101,14 +110,18 @@ export class WorkerSandboxService {
         );
     }
 
-    setCommandExecutor(executor: CommandExecutor): void {
+    /**
+     * 注入运行时依赖：命令执行器与视图激活器。
+     */
+    init(executor: CommandExecutor, activate: (viewId: string) => void): void {
         this.commandExecutor = executor;
-    }
-
-    setViewActivator(activate: (viewId: string) => void): void {
         this.viewActivator = activate;
     }
 
+    /**
+     * 订阅能力推送事件（用于观测 settings/events 的推送消息）。
+     * 可以提供给插件视图方
+     */
     onSubscriptionPush(listener: (push: CapabilitySubscriptionPush) => void): () => void {
         this.subscriptionPushListeners.add(listener);
         return () => {
@@ -116,6 +129,9 @@ export class WorkerSandboxService {
         };
     }
 
+    /**
+     * 激活插件：按需创建 worker，并调用 worker.activate。
+     */
     async activate(pluginId: string): Promise<void> {
         const record = await this.getOrCreate(pluginId);
         if (record.active) return;
@@ -123,6 +139,9 @@ export class WorkerSandboxService {
         record.active = true;
     }
 
+    /**
+     * 反激活插件：调用 worker.deactivate 后释放本地会话资源。
+     */
     async deactivate(pluginId: string): Promise<void> {
         const record = this.workers.get(pluginId);
         if (!record) return;
@@ -134,15 +153,24 @@ export class WorkerSandboxService {
         }
     }
 
+    /**
+     * 执行插件命令：通过 RPC 转发到对应 worker。
+     */
     async executeCommand(pluginId: string, commandId: string, args: unknown[], trace: string[]): Promise<unknown> {
         const record = await this.getOrCreate(pluginId);
         return this.callWorker(record, 'executeCommand', { commandId, args, trace });
     }
 
+    /**
+     * 宿主方法调用入口：供上层按 method + params 直接调用能力。
+     */
     async invokeHostMethod(pluginId: string, method: string, params?: unknown): Promise<unknown> {
         return this.dispatchHostMethod({ pluginId }, method, params);
     }
 
+    /**
+     * 注册内置能力：commands/views/settings/storage/events。
+     */
     private registerBuiltinCapabilities(): void {
         this.deps.capabilityRegistry.register('commands', ({ pluginId }) => ({
             execute: async (commandIdOrPayload: unknown, ...restArgs: unknown[]): Promise<unknown> => {
@@ -180,7 +208,7 @@ export class WorkerSandboxService {
 
         this.deps.capabilityRegistry.register('views', () => ({
             activate: (viewIdOrPayload: unknown): null => {
-                const viewId = this.resolveViewId('views.activate', viewIdOrPayload);
+                const viewId = this.readStringArg('views.activate', viewIdOrPayload, 'viewId');
                 if (this.viewActivator) {
                     this.viewActivator(viewId);
                 }
@@ -190,55 +218,52 @@ export class WorkerSandboxService {
 
         this.deps.capabilityRegistry.register('settings', ({ pluginId }) => ({
             get: async <T>(keyOrPayload: unknown): Promise<T | undefined> => {
-                const key = this.resolveKey('settings.get', keyOrPayload);
+                const key = this.readStringArg('settings.get', keyOrPayload, 'key');
                 return this.deps.pluginSettingService.get(pluginId, key);
             },
             set: async (keyOrPayload: unknown, value?: unknown): Promise<void> => {
-                const key = this.resolveKey('settings.set', keyOrPayload);
-                const nextValue =
-                    typeof keyOrPayload === 'string'
-                        ? value
-                        : this.asRecord(keyOrPayload).value;
+                const key = this.readStringArg('settings.set', keyOrPayload, 'key');
+                const nextValue = typeof keyOrPayload === 'string' ? value : this.asRecord(keyOrPayload).value;
                 await this.deps.pluginSettingService.persist(pluginId, key, nextValue);
             },
             subscribe: async (keyOrPayload: unknown): Promise<string> => {
-                const key = this.resolveKey('settings.subscribe', keyOrPayload);
+                const key = this.readStringArg('settings.subscribe', keyOrPayload, 'key');
                 const subscriptionId = this.nextSubscriptionId('settings');
                 this.settingSubscriptions.set(subscriptionId, { pluginId, key });
                 return subscriptionId;
             },
             unsubscribe: async (subscriptionIdOrPayload: unknown): Promise<null> => {
-                const subscriptionId = this.resolveSubscriptionId('settings.unsubscribe', subscriptionIdOrPayload);
+                const subscriptionId = this.readStringArg('settings.unsubscribe', subscriptionIdOrPayload, 'subscriptionId');
                 this.settingSubscriptions.delete(subscriptionId);
                 return null;
             },
-            onChange: () => {
-                throw new Error('Use settings.subscribe/settings.unsubscribe over RPC');
+            onChange: <T>(key: string, handler: (value: T | undefined) => void) => {
+                const unsubscribe = this.deps.pluginEventBus.on('setting.changed', (payload) => {
+                    if (!payload || typeof payload !== 'object') return;
+                    const data = payload as { pluginId?: unknown; key?: unknown; value?: unknown };
+                    if (data.pluginId !== pluginId || data.key !== key) return;
+                    handler(data.value as T | undefined);
+                });
+                return { dispose: unsubscribe };
             },
         }));
 
         this.deps.capabilityRegistry.register('storage', ({ pluginId }) => ({
             get: async <T>(keyOrPayload: unknown): Promise<T | undefined> => {
-                const key = this.resolveKey('storage.get', keyOrPayload);
+                const key = this.readStringArg('storage.get', keyOrPayload, 'key');
                 return this.deps.pluginStorageService.get(pluginId, key);
             },
             set: async (keyOrPayload: unknown, value?: unknown): Promise<void> => {
-                const key = this.resolveKey('storage.set', keyOrPayload);
-                const nextValue =
-                    typeof keyOrPayload === 'string'
-                        ? value
-                        : this.asRecord(keyOrPayload).value;
+                const key = this.readStringArg('storage.set', keyOrPayload, 'key');
+                const nextValue = typeof keyOrPayload === 'string' ? value : this.asRecord(keyOrPayload).value;
                 await this.deps.pluginStorageService.persist(pluginId, key, nextValue);
             },
         }));
 
         this.deps.capabilityRegistry.register('events', ({ pluginId }) => ({
             emit: (eventOrPayload: unknown, payload?: unknown): null => {
-                const eventName = this.resolveEventName('events.emit', eventOrPayload);
-                const eventPayload =
-                    typeof eventOrPayload === 'string'
-                        ? payload
-                        : this.asRecord(eventOrPayload).payload;
+                const eventName = this.readStringArg('events.emit', eventOrPayload, 'event');
+                const eventPayload = typeof eventOrPayload === 'string' ? payload : this.asRecord(eventOrPayload).payload;
 
                 this.deps.pluginEventBus.emit(eventName, eventPayload);
 
@@ -250,22 +275,24 @@ export class WorkerSandboxService {
                 return null;
             },
             subscribe: async (eventOrPayload: unknown): Promise<string> => {
-                const eventName = this.resolveEventName('events.subscribe', eventOrPayload);
+                const eventName = this.readStringArg('events.subscribe', eventOrPayload, 'event');
                 const subscriptionId = this.nextSubscriptionId('events');
                 this.eventSubscriptions.set(subscriptionId, { pluginId, eventName });
                 return subscriptionId;
             },
             unsubscribe: async (subscriptionIdOrPayload: unknown): Promise<null> => {
-                const subscriptionId = this.resolveSubscriptionId('events.unsubscribe', subscriptionIdOrPayload);
+                const subscriptionId = this.readStringArg('events.unsubscribe', subscriptionIdOrPayload, 'subscriptionId');
                 this.eventSubscriptions.delete(subscriptionId);
                 return null;
             },
-            on: () => {
-                throw new Error('Use events.subscribe/events.unsubscribe over RPC');
+            on: (eventName: string, handler: (payload: unknown) => void) => {
+                const unsubscribe = this.deps.pluginEventBus.on(eventName, handler);
+                return { dispose: unsubscribe };
             },
         }));
     }
 
+    // 生成唯一订阅号
     private nextSubscriptionId(type: 'settings' | 'events'): string {
         this.subscriptionSerial += 1;
         return `${type}:${this.subscriptionSerial}`;
@@ -285,75 +312,23 @@ export class WorkerSandboxService {
         }
     }
 
-    private parseMethod(method: string): { capabilityId: string; methodName: string } {
-        const separatorIndex = method.indexOf('.');
-        if (separatorIndex <= 0 || separatorIndex >= method.length - 1) {
-            throw new Error(`Unsupported worker method: ${method}`);
-        }
-
-        return {
-            capabilityId: method.slice(0, separatorIndex),
-            methodName: method.slice(separatorIndex + 1),
-        };
-    }
-
+    /**
+     * 分发 worker 发来的能力调用（capability.method -> CapabilityRegistry.invoke）。
+     */
     private dispatchHostMethod(context: WorkerMethodContext, method: string, params?: unknown): Promise<unknown> {
         if (typeof method !== 'string' || method.length === 0) {
             throw new Error('Worker request missing method');
         }
 
-        const { capabilityId, methodName } = this.parseMethod(method);
+        const separatorIndex = method.indexOf('.');
+        if (separatorIndex <= 0 || separatorIndex >= method.length - 1) {
+            throw new Error(`Unsupported worker method: ${method}`);
+        }
+
+        const capabilityId = method.slice(0, separatorIndex);
+        const methodName = method.slice(separatorIndex + 1);
         const invokeArgs = params === undefined ? [] : Array.isArray(params) ? params : [params];
         return this.deps.capabilityRegistry.invoke(context.pluginId, capabilityId, methodName, invokeArgs);
-    }
-
-    private resolveKey(method: string, keyOrPayload: unknown): string {
-        if (typeof keyOrPayload === 'string' && keyOrPayload.length > 0) {
-            return keyOrPayload;
-        }
-
-        const key = this.asRecord(keyOrPayload).key;
-        if (typeof key !== 'string' || key.length === 0) {
-            throw new Error(`Capability ${method} missing key`);
-        }
-        return key;
-    }
-
-    private resolveEventName(method: string, eventOrPayload: unknown): string {
-        if (typeof eventOrPayload === 'string' && eventOrPayload.length > 0) {
-            return eventOrPayload;
-        }
-
-        const eventName = this.asRecord(eventOrPayload).event;
-        if (typeof eventName !== 'string' || eventName.length === 0) {
-            throw new Error(`Capability ${method} missing event`);
-        }
-        return eventName;
-    }
-
-    private resolveSubscriptionId(method: string, subscriptionIdOrPayload: unknown): string {
-        if (typeof subscriptionIdOrPayload === 'string' && subscriptionIdOrPayload.length > 0) {
-            return subscriptionIdOrPayload;
-        }
-
-        const payload = this.asRecord(subscriptionIdOrPayload);
-        const subscriptionId = payload.subscriptionId;
-        if (typeof subscriptionId !== 'string' || subscriptionId.length === 0) {
-            throw new Error(`Capability ${method} missing subscriptionId`);
-        }
-        return subscriptionId;
-    }
-
-    private resolveViewId(method: string, viewIdOrPayload: unknown): string {
-        if (typeof viewIdOrPayload === 'string' && viewIdOrPayload.length > 0) {
-            return viewIdOrPayload;
-        }
-
-        const viewId = this.asRecord(viewIdOrPayload).viewId;
-        if (typeof viewId !== 'string' || viewId.length === 0) {
-            throw new Error(`Capability ${method} missing viewId`);
-        }
-        return viewId;
     }
 
     private asRecord(value: unknown): Record<string, unknown> {
@@ -363,6 +338,21 @@ export class WorkerSandboxService {
         return value as Record<string, unknown>;
     }
 
+    private readStringArg(method: string, value: unknown, payloadKey: string): string {
+        if (typeof value === 'string' && value.length > 0) {
+            return value;
+        }
+
+        const payloadValue = this.asRecord(value)[payloadKey];
+        if (typeof payloadValue !== 'string' || payloadValue.length === 0) {
+            throw new Error(`Capability ${method} missing ${payloadKey}`);
+        }
+        return payloadValue;
+    }
+
+    /**
+     * 获取或创建插件 worker 会话，并完成 init 握手。
+     */
     private async getOrCreate(pluginId: string): Promise<WorkerSessionRecord> {
         const existing = this.workers.get(pluginId);
         if (existing) return existing;
@@ -413,10 +403,9 @@ export class WorkerSandboxService {
         this.workers.set(pluginId, record);
 
         try {
-            const moduleImportUrl = await resolvePluginAssetImportUrl(manifest.moduleUrl);
             await this.callWorker(record, 'init', {
                 pluginId,
-                moduleUrl: moduleImportUrl,
+                moduleUrl: manifest.moduleUrl,
             });
             return record;
         } catch (error) {
@@ -430,6 +419,7 @@ export class WorkerSandboxService {
         return record.rpcClient.call(method, params);
     }
 
+    // 发送主机事件，其实就是wokerService通知worker
     private postHostEvent(pluginId: string, eventName: string, payload: unknown): void {
         const record = this.workers.get(pluginId);
         if (!record) return;
@@ -458,6 +448,7 @@ export class WorkerSandboxService {
         this.workers.delete(pluginId);
     }
 
+    // 销毁单个 worker 会话：取消注册、关闭 RPC、终止 worker。
     private disposeWorkerSession(record: WorkerSessionRecord, reason: string): void {
         try {
             record.unregisterHostMethod();
@@ -481,6 +472,7 @@ export class WorkerSandboxService {
         }
     }
 
+    // 清除插件订阅的所有事件id
     private removePluginSubscriptions(pluginId: string): void {
         for (const [subscriptionId, record] of this.settingSubscriptions.entries()) {
             if (record.pluginId === pluginId) {
@@ -504,6 +496,7 @@ export class WorkerSandboxService {
         this.workers.delete(pluginId);
     }
 
+    // 全量销毁所有插件 worker 资源。
     private async disposeAll(): Promise<void> {
         const pluginIds = Array.from(this.workers.keys());
         for (const pluginId of pluginIds) {

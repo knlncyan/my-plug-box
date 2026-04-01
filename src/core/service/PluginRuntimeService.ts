@@ -35,14 +35,11 @@ export class PluginRuntimeService {
 
 
     constructor(private readonly deps: PluginRuntimeServiceDeps) {
-        this.deps.workerSandboxService.setCommandExecutor(
-            (commandId: string, options: ExecuteCommandPipelineOptions, ...args: unknown[]) =>
-                this.executeCommandInternal(commandId, options, ...args)
-        );
+        this.deps.workerSandboxService.init(
+            (commandId: string, options: ExecuteCommandPipelineOptions, ...args: unknown[]) => this.executeCommandInternal(commandId, options, ...args),
+            (viewId: string) => this.setActiveView(viewId)
 
-        this.deps.workerSandboxService.setViewActivator((viewId: string) => {
-            this.setActiveView(viewId);
-        });
+        );
     }
 
     subscribe = (listener: Listener): (() => void) => {
@@ -114,7 +111,7 @@ export class PluginRuntimeService {
             return;
         }
 
-        void this.ensurePluginReady(plugin.pluginId, `onView:${plugin?.viewMeta?.id}`)
+        void this.ensurePluginReady(plugin.pluginId, `onView:${pluginId}`)
             .then(() => {
                 this.patch({ activeViewPluginId: plugin.pluginId, error: null });
             })
@@ -171,11 +168,6 @@ export class PluginRuntimeService {
         return result;
     }
 
-
-
-
-
-
     private async disposeRuntime(): Promise<void> {
         if (this.initPromise) {
             try {
@@ -206,7 +198,7 @@ export class PluginRuntimeService {
         const pluginEntry = this.deps.pluginRuntimeCatalogService.getPluginEntryById(pluginId);
         const rules = pluginEntry?.manifest?.activationEvents ?? [];
 
-        if (rules.length === 0) {
+        if (rules.length === 0 || activationEvent == `onView:${pluginId}`) {
             return true;
         }
         if (!activationEvent) {
@@ -268,7 +260,7 @@ export class PluginRuntimeService {
     }
 
     private async refreshAll(): Promise<void> {
-        const pluginEntries = this.deps.pluginRuntimeCatalogService.getAllPluginEntry();
+        const pluginEntries = await this.deps.pluginRuntimeCatalogService.getAllPluginEntry(true);
         // const plugins = pluginsReponse.data ?? [];
         // const commandsRaw = commandsReponse.data ?? [];
 

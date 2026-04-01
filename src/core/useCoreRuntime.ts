@@ -1,7 +1,10 @@
 ﻿import { useEffect, useSyncExternalStore } from 'react';
-import { coreRuntime } from './index';
+import { container } from './index';
+import { PluginRuntimeService } from './service/PluginRuntimeService';
 
-function useHostRuntime() {
+export function useCoreRuntime() {
+    const coreRuntime = container.resolve(PluginRuntimeService);
+
     const snapshot = useSyncExternalStore(coreRuntime.subscribe, coreRuntime.getSnapshot, coreRuntime.getSnapshot);
 
     useEffect(() => {
@@ -15,8 +18,4 @@ function useHostRuntime() {
         refresh: coreRuntime.refresh,
         shutdown: coreRuntime.shutdown,
     };
-}
-
-export function useCoreRuntime() {
-    return useHostRuntime();
 }

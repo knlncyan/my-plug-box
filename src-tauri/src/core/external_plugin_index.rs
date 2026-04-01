@@ -1,9 +1,10 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::fmt::Write as _;
 use std::fs;
 use std::path::{Path, PathBuf};
 use tauri::path::BaseDirectory;
-use tauri::{AppHandle, Manager};
+use tauri::{AppHandle, Manager, Url};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ExternalPluginViewManifestDto {
@@ -43,15 +44,6 @@ pub struct ExternalPluginManifestDto {
     pub view_url: Option<String>,
 }
 
-fn resolve_external_plugins_root(app: AppHandle) -> Result<PathBuf, String> {
-    let root = app
-        .path()
-        .resolve("plugins", BaseDirectory::AppData)
-        .map_err(|e| e.to_string())?;
-    println!("root位置: {}", root.display());
-    Ok(root)
-}
-
 fn read_manifest_file(path: &Path) -> Result<ExternalPluginManifestDto, String> {
     let raw = fs::read_to_string(path)
         .map_err(|error| format!("failed to read {}: {}", path.display(), error))?;
@@ -63,16 +55,37 @@ fn read_manifest_file(path: &Path) -> Result<ExternalPluginManifestDto, String> 
         .map_err(|error| format!("failed to parse {}: {}", path.display(), error))
 }
 
+fn build_asset_import_url(path: &Path) -> String {
+    if cfg!(target_os = "windows") {
+        format!("http://asset.localhost/{}", path.to_string_lossy())
+    } else {
+        format!("asset://localhost/{}", path.to_string_lossy())
+    }
+}
+
+fn clean_path(s: &str) -> &str {
+    s.trim_start_matches('/').trim_start_matches('\\')
+}
+
 fn normalize_manifest(
     mut manifest: ExternalPluginManifestDto,
-    folder_name: &str,
+    app_data_dir: &Path,
+    plugin_dir: &Path,
 ) -> ExternalPluginManifestDto {
-    if manifest.module_url.is_none() {
-        manifest.module_url = Some(format!("/plugins/{}/index.js", folder_name));
-    }
+    let module_path = match manifest.module_url {
+        Some(url) => app_data_dir.join(clean_path(&url)),
+        None => plugin_dir.join("index.js"),
+    };
 
-    if manifest.view.is_some() && manifest.view_url.is_none() {
-        manifest.view_url = Some(format!("/plugins/{}/view/index.js", folder_name));
+    manifest.module_url = Some(build_asset_import_url(&module_path));
+
+    if manifest.view.is_some() {
+        let view_path = match manifest.view_url {
+            Some(url) => app_data_dir.join(clean_path(&url)),
+            None => plugin_dir.join("view/index.js"),
+        };
+
+        manifest.view_url = Some(build_asset_import_url(&view_path));
     }
 
     manifest
@@ -81,7 +94,8 @@ fn normalize_manifest(
 pub fn scan_external_plugin_manifests(
     app: AppHandle,
 ) -> Result<Vec<ExternalPluginManifestDto>, String> {
-    let root = resolve_external_plugins_root(app)?;
+    let app_data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
+    let root = app_data_dir.join("plugins");
     if !root.exists() {
         return Ok(Vec::new());
     }
@@ -99,10 +113,9 @@ pub fn scan_external_plugin_manifests(
             continue;
         }
 
-        let folder_name = match path.file_name().and_then(|name| name.to_str()) {
-            Some(name) if !name.is_empty() => name,
-            _ => continue,
-        };
+        if path.file_name().and_then(|name| name.to_str()).is_none() {
+            continue;
+        }
 
         let manifest_path = path.join("plugin.json");
         if !manifest_path.exists() {
@@ -110,57 +123,9 @@ pub fn scan_external_plugin_manifests(
         }
 
         let manifest = read_manifest_file(&manifest_path)?;
-        manifests.push(normalize_manifest(manifest, folder_name));
+        manifests.push(normalize_manifest(manifest, &app_data_dir, &path));
     }
 
     manifests.sort_by(|a, b| a.id.cmp(&b.id));
     Ok(manifests)
 }
-
-// fn to_core_manifest(manifest: &ExternalPluginManifestDto) -> PluginManifest {
-//     PluginManifest {
-//         id: manifest.id.clone(),
-//         name: manifest.name.clone(),
-//         version: manifest.version.clone(),
-//         icon: manifest.icon.clone(),
-//         description: manifest.description.clone(),
-//         activation_events: manifest.activation_events.clone(),
-//         view: manifest.view.as_ref().map(|view| ViewMeta {
-//             id: view.id.clone(),
-//             title: view.title.clone(),
-//             plugin_id: manifest.id.clone(),
-//             props: view.props.clone(),
-//         }),
-//     }
-// }
-
-// pub fn register_external_manifests(
-//     manager: &mut PluginManager,
-//     manifests: &[ExternalPluginManifestDto],
-// ) -> Result<(), String> {
-//     for manifest in manifests {
-//         let plugin_id = manifest.id.clone();
-//         if manager.contains_plugin(&plugin_id) {
-//             // 仅新增未注册插件，不改变已管理插件状态。
-//             continue;
-//         }
-
-//         let core_manifest = to_core_manifest(manifest);
-//         let module = JsPluginAdapter::new(plugin_id.clone());
-
-//         // 重复注册返回 warning，这里按幂等处理。
-//         let _ = manager.register_builtin(core_manifest, module)?;
-
-//         for command in &manifest.commands {
-//             let _ = manager.register_command(CommandMeta {
-//                 id: command.id.clone(),
-//                 description: command.description.clone(),
-//                 plugin_id: plugin_id.clone(),
-//                 shortcut: command.shortcut.clone(),
-//                 shortcut_scope: command.shortcut_scope.clone(),
-//             })?;
-//         }
-//     }
-
-//     Ok(())
-// }

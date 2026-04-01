@@ -25,7 +25,6 @@ declare global {
 }
 
 let pluginId = '';
-// 内部的moduleUrl使用提前解析好的完整路径
 let moduleUrl = '';
 let pluginModule: PluginModule | null = null;
 let activated = false;
@@ -51,7 +50,6 @@ const rpcServer = createWorkerRpcServer({
     endpoint,
 });
 
-// 确保主模块index.js存在并加载
 async function ensurePluginModule(): Promise<PluginModule> {
     if (pluginModule) return pluginModule;
     if (!pluginId) {
@@ -82,7 +80,7 @@ async function callHost(method: string, params?: unknown): Promise<unknown> {
 async function ensureSettingSubscription(key: string): Promise<void> {
     if (settingSubscriptionByKey.has(key)) return;
 
-    const subscriptionId = await callHost('settings.subscribe', key);
+    const subscriptionId = await callHost('settings.subscribe', { key });
     if (typeof subscriptionId !== 'string' || subscriptionId.length === 0) {
         throw new Error(`settings.subscribe failed for key: ${key}`);
     }
@@ -98,13 +96,13 @@ async function releaseSettingSubscriptionIfUnused(key: string): Promise<void> {
     if (!subscriptionId) return;
 
     settingSubscriptionByKey.delete(key);
-    await callHost('settings.unsubscribe', subscriptionId);
+    await callHost('settings.unsubscribe', { subscriptionId });
 }
 
 async function ensureEventSubscription(eventName: string): Promise<void> {
     if (eventSubscriptionByName.has(eventName)) return;
 
-    const subscriptionId = await callHost('events.subscribe', eventName);
+    const subscriptionId = await callHost('events.subscribe', { event: eventName });
     if (typeof subscriptionId !== 'string' || subscriptionId.length === 0) {
         throw new Error(`events.subscribe failed for event: ${eventName}`);
     }
@@ -120,27 +118,20 @@ async function releaseEventSubscriptionIfUnused(eventName: string): Promise<void
     if (!subscriptionId) return;
 
     eventSubscriptionByName.delete(eventName);
-    await callHost('events.unsubscribe', subscriptionId);
+    await callHost('events.unsubscribe', { subscriptionId });
 }
 
-// 创建一个代理对象，这里使用代理对象的意义是自动获取到methodName，否则就要写callHost(`${capabilityId}`, 'open')
-// 其他能力需要一些特殊实现，所以不走代理对象
 function createDynamicCapabilityProxy(capabilityId: string): CapabilityContract {
     const existing = capabilityCache.get(capabilityId);
     if (existing) return existing;
 
-    // 一个空对象的代理对象，只要访问属性就必定触发get陷阱
     const proxy = new Proxy(
         {},
         {
-            // 空对象_target自然无意义，也不需要使用到
             get: (_target, methodName) => {
                 if (typeof methodName !== 'string') return undefined;
                 return (...args: unknown[]) =>
-                    callHost(
-                        `${capabilityId}.${methodName}`,
-                        args.length <= 1 ? args[0] : args
-                    );
+                    callHost(`${capabilityId}.${methodName}`, { args });
             },
         }
     ) as CapabilityContract;
@@ -152,7 +143,7 @@ function createDynamicCapabilityProxy(capabilityId: string): CapabilityContract 
 function createSettingsCapability(): SettingsCapability {
     return {
         get: async <T>(key: string): Promise<T | undefined> => {
-            return (await callHost('settings.get', key)) as T | undefined;
+            return (await callHost('settings.get', { key })) as T | undefined;
         },
         set: async (key: string, value: unknown): Promise<void> => {
             await callHost('settings.set', { key, value });
@@ -313,8 +304,6 @@ rpcServer.register('executeCommand', async (payload) => {
         Array.isArray(data.trace) ? (data.trace as string[]) : []
     );
 });
-
-// =========================================== 上面是worker service的方法，下面是 worker client的方法 ===============================================
 
 function emitSettingValue(key: string, value: unknown): void {
     const watchers = settingWatchers.get(key);

@@ -1,4 +1,4 @@
-﻿import * as React from 'react';
+import * as React from 'react';
 import { Component, type ComponentType, type ErrorInfo, type ReactNode, useEffect, useState } from 'react';
 import ReactDOM from 'react-dom/client';
 import '../../index.css';
@@ -144,7 +144,7 @@ function createSandboxPluginApi(params: SandboxParams): PluginHostAPI {
 
     async function ensureSettingSubscription(key: string): Promise<void> {
         if (settingSubscriptionByKey.has(key)) return;
-        const subscriptionId = await call<string>('settings.subscribe', key);
+        const subscriptionId = await call<string>('settings.subscribe', { key });
         settingSubscriptionByKey.set(key, subscriptionId);
     }
 
@@ -156,12 +156,12 @@ function createSandboxPluginApi(params: SandboxParams): PluginHostAPI {
         if (!subscriptionId) return;
 
         settingSubscriptionByKey.delete(key);
-        await call('settings.unsubscribe', subscriptionId);
+        await call('settings.unsubscribe', { subscriptionId });
     }
 
     async function ensureEventSubscription(eventName: string): Promise<void> {
         if (eventSubscriptionByName.has(eventName)) return;
-        const subscriptionId = await call<string>('events.subscribe', eventName);
+        const subscriptionId = await call<string>('events.subscribe', { event: eventName });
         eventSubscriptionByName.set(eventName, subscriptionId);
     }
 
@@ -173,7 +173,7 @@ function createSandboxPluginApi(params: SandboxParams): PluginHostAPI {
         if (!subscriptionId) return;
 
         eventSubscriptionByName.delete(eventName);
-        await call('events.unsubscribe', subscriptionId);
+        await call('events.unsubscribe', { subscriptionId });
     }
 
     function createDynamicCapabilityProxy(capabilityId: string): CapabilityContract {
@@ -188,10 +188,7 @@ function createSandboxPluginApi(params: SandboxParams): PluginHostAPI {
                 get: (_target, methodName) => {
                     if (typeof methodName !== 'string') return undefined;
                     return (...args: unknown[]) =>
-                        call(
-                            `${capabilityId}.${methodName}`,
-                            args.length <= 1 ? args[0] : args
-                        );
+                        call(`${capabilityId}.${methodName}`, { args });
                 },
             }
         ) as CapabilityContract;
@@ -204,7 +201,7 @@ function createSandboxPluginApi(params: SandboxParams): PluginHostAPI {
         settings: () => {
             const settings: SettingsCapability = {
                 get: async function <T>(key: string): Promise<T | undefined> {
-                    return call<T | undefined>('settings.get', key);
+                    return call<T | undefined>('settings.get', { key });
                 },
                 set: async (key: string, value: unknown): Promise<void> => {
                     await call('settings.set', { key, value });
@@ -267,10 +264,10 @@ function createSandboxPluginApi(params: SandboxParams): PluginHostAPI {
             disposeSubscriptionListener();
 
             for (const subscriptionId of settingSubscriptionByKey.values()) {
-                void call('settings.unsubscribe', subscriptionId);
+                void call('settings.unsubscribe', { subscriptionId });
             }
             for (const subscriptionId of eventSubscriptionByName.values()) {
-                void call('events.unsubscribe', subscriptionId);
+                void call('events.unsubscribe', { subscriptionId });
             }
 
             rpcClient.dispose();

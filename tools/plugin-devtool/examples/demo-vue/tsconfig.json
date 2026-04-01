@@ -11,7 +11,7 @@
     "lib": ["ES2020", "DOM"],
     "baseUrl": ".",
     "paths": {
-      "@plug-box/plugin-sdk": ["./sdk/index.ts"]
+      "@modudesk/plugin-sdk": ["./sdk/index.ts"]
     }
   },
   "include": ["src", "sdk"]

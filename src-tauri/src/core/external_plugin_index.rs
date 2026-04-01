@@ -1,10 +1,8 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::fmt::Write as _;
 use std::fs;
-use std::path::{Path, PathBuf};
-use tauri::path::BaseDirectory;
-use tauri::{AppHandle, Manager, Url};
+use std::path::{Path};
+use tauri::{AppHandle, Manager};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ExternalPluginViewManifestDto {

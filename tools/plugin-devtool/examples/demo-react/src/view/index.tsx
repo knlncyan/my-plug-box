@@ -1,5 +1,5 @@
-﻿import React, { useEffect, useState } from 'react';
-import { createPluginApi } from '@plug-box/plugin-sdk';
+import React, { useEffect, useState } from 'react';
+import { createPluginApi } from '@modudesk/plugin-sdk';
 import './style.css';
 
 export default function PluginView() {

@@ -1,4 +1,11 @@
-import type { EventsCapability, PluginHostAPI, SettingsCapability } from '../../domain/api';
+import type {
+    CommandsCapability,
+    EventsCapability,
+    PluginHostAPI,
+    SettingsCapability,
+    StorageCapability,
+    ViewsCapability,
+} from '../../domain/api';
 import type { CapabilityById, CapabilityContract } from '../../domain/capability';
 import {
     createWorkerRpcClient,
@@ -20,7 +27,7 @@ interface InvokeHostMethodPayload {
 
 declare global {
     interface WorkerGlobalScope {
-        __PLUG_BOX_API_FACTORY__?: () => Promise<PluginHostAPI>;
+        __MODUDESK_API_FACTORY__?: () => Promise<PluginHostAPI>;
     }
 }
 
@@ -172,6 +179,32 @@ function createSettingsCapability(): SettingsCapability {
     };
 }
 
+function createCommandsCapability(): CommandsCapability {
+    return {
+        execute: async (commandId: string, ...args: unknown[]): Promise<unknown> => {
+            return callHost('commands.execute', { commandId, args });
+        },
+    };
+}
+
+function createViewsCapability(): ViewsCapability {
+    return {
+        activate: (viewId: string): void => {
+            void callHost('views.activate', { viewId });
+        },
+    };
+}
+
+function createStorageCapability(): StorageCapability {
+    return {
+        get: async <T>(key: string): Promise<T | undefined> => {
+            return (await callHost('storage.get', { key })) as T | undefined;
+        },
+        set: async (key: string, value: unknown): Promise<void> => {
+            await callHost('storage.set', { key, value });
+        },
+    };
+}
 function createEventsCapability(): EventsCapability {
     return {
         emit: (eventName: string, payload?: unknown): void => {
@@ -208,12 +241,39 @@ const hostApi: PluginHostAPI = {
         return (await callHost(method, params)) as T;
     },
     get: <K extends string>(capabilityId: K): CapabilityById<K> => {
+        const cached = capabilityCache.get(capabilityId);
+        if (cached) {
+            return cached as CapabilityById<K>;
+        }
+
+        if (capabilityId === 'commands') {
+            const commands = createCommandsCapability() as unknown as CapabilityContract;
+            capabilityCache.set(capabilityId, commands);
+            return commands as CapabilityById<K>;
+        }
+
+        if (capabilityId === 'views') {
+            const views = createViewsCapability() as unknown as CapabilityContract;
+            capabilityCache.set(capabilityId, views);
+            return views as CapabilityById<K>;
+        }
+
+        if (capabilityId === 'storage') {
+            const storage = createStorageCapability() as unknown as CapabilityContract;
+            capabilityCache.set(capabilityId, storage);
+            return storage as CapabilityById<K>;
+        }
+
         if (capabilityId === 'settings') {
-            return createSettingsCapability() as CapabilityById<K>;
+            const settings = createSettingsCapability() as unknown as CapabilityContract;
+            capabilityCache.set(capabilityId, settings);
+            return settings as CapabilityById<K>;
         }
 
         if (capabilityId === 'events') {
-            return createEventsCapability() as CapabilityById<K>;
+            const events = createEventsCapability() as unknown as CapabilityContract;
+            capabilityCache.set(capabilityId, events);
+            return events as CapabilityById<K>;
         }
 
         return createDynamicCapabilityProxy(capabilityId) as CapabilityById<K>;
@@ -221,7 +281,7 @@ const hostApi: PluginHostAPI = {
 };
 
 const workerScope = self as unknown as WorkerGlobalScope;
-workerScope.__PLUG_BOX_API_FACTORY__ = async () => hostApi;
+workerScope.__MODUDESK_API_FACTORY__ = async () => hostApi;
 
 async function executeCommand(commandId: string, args: unknown[], trace: string[]): Promise<unknown> {
     const module = await ensurePluginModule();

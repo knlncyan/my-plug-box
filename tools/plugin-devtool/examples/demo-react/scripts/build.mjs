@@ -7,7 +7,7 @@ import react from '@vitejs/plugin-react';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const root = path.resolve(__dirname, '..');
-const configPath = path.resolve(root, 'plugbox.config.json');
+const configPath = path.resolve(root, 'modudesk.config.json');
 
 function readConfig() {
   const raw = fs.readFileSync(configPath, 'utf8');
@@ -16,7 +16,7 @@ function readConfig() {
 
 function ensureString(value, field) {
   if (typeof value !== 'string' || value.trim().length === 0) {
-    throw new Error(`[plugbox-build] invalid field: ${field}`);
+    throw new Error(`[modudesk-build] invalid field: ${field}`);
   }
   return value.trim();
 }
@@ -42,7 +42,7 @@ async function main() {
     plugins: [react()],
     resolve: {
       alias: [
-        { find: '@plug-box/plugin-sdk', replacement: path.resolve(root, 'sdk/index.ts') },
+        { find: '@modudesk/plugin-sdk', replacement: path.resolve(root, 'sdk/index.ts') },
         { find: 'react/jsx-runtime', replacement: path.resolve(root, 'sdk/react-jsx-runtime.ts') },
         { find: 'react/jsx-dev-runtime', replacement: path.resolve(root, 'sdk/react-jsx-runtime.ts') },
         { find: /^react$/, replacement: path.resolve(root, 'sdk/react.ts') },
@@ -97,7 +97,7 @@ async function main() {
     'utf8'
   );
 
-  console.info('[plugbox-build] done:', outDir);
+  console.info('[modudesk-build] done:', outDir);
 }
 
 main().catch((error) => {

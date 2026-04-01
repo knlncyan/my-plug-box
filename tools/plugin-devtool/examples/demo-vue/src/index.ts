@@ -1,4 +1,4 @@
-import type { PluginModule } from '@plug-box/plugin-sdk';
+import type { PluginModule } from '@modudesk/plugin-sdk';
 
 const pluginId = 'external.demo-vue';
 

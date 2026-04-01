@@ -3,6 +3,12 @@ import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
 import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const TOOL_ROOT = path.resolve(__dirname, '..');
+const REPO_ROOT = path.resolve(TOOL_ROOT, '..', '..');
 
 function parseArgs(argv) {
   const args = [...argv];
@@ -44,7 +50,7 @@ function writeFile(filePath, content) {
 
 function ensureString(value, field) {
   if (typeof value !== 'string' || value.trim().length === 0) {
-    throw new Error(`[plugbox] invalid field: ${field}`);
+    throw new Error(`[modudesk] invalid field: ${field}`);
   }
   return value.trim();
 }
@@ -52,196 +58,28 @@ function ensureString(value, field) {
 function normalizePluginId(raw) {
   const pluginId = ensureString(raw, 'pluginId');
   if (!/^[a-zA-Z0-9][a-zA-Z0-9._-]*$/.test(pluginId)) {
-    throw new Error('[plugbox] pluginId must match /^[a-zA-Z0-9][a-zA-Z0-9._-]*$/');
+    throw new Error('[modudesk] pluginId must match /^[a-zA-Z0-9][a-zA-Z0-9._-]*$/');
   }
   return pluginId;
 }
 
-function buildScript(framework) {
-  const frameworkPluginImport = framework === 'vue'
-    ? "import vue from '@vitejs/plugin-vue';"
-    : "import react from '@vitejs/plugin-react';";
-
-  const frameworkPluginCall = framework === 'vue' ? 'vue()' : 'react()';
-
-  return `import fs from 'node:fs';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { build } from 'vite';
-${frameworkPluginImport}
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-const root = path.resolve(__dirname, '..');
-const configPath = path.resolve(root, 'plugbox.config.json');
-
-function readConfig() {
-  const raw = fs.readFileSync(configPath, 'utf8');
-  return JSON.parse(raw);
-}
-
-function ensureString(value, field) {
-  if (typeof value !== 'string' || value.trim().length === 0) {
-    throw new Error(\`[plugbox-build] invalid field: \${field}\`);
+function readRepoFile(relativePath) {
+  const absolutePath = path.resolve(REPO_ROOT, relativePath);
+  if (!fs.existsSync(absolutePath)) {
+    throw new Error(`[modudesk-plugin] source file not found: ${absolutePath}`);
   }
-  return value.trim();
+  return fs.readFileSync(absolutePath, 'utf8');
 }
 
-async function main() {
-  const cfg = readConfig();
-  const pluginId = ensureString(cfg.pluginId, 'pluginId');
-  const outRootDir = path.resolve(root, typeof cfg.outDir === 'string' ? cfg.outDir : 'dist');
-  const outDir = path.resolve(outRootDir, pluginId);
+function sdkRuntimeIndexTs() {
+  return `export * from './types/capability';
+export * from './types/api';
+export * from './types/plugin-module';
 
-  const moduleEntry = path.resolve(root, ensureString(cfg.entries?.module, 'entries.module'));
-  const hasView = !!cfg.view;
-  const rollupInput = { index: moduleEntry };
-
-  if (hasView) {
-    const viewEntry = path.resolve(root, ensureString(cfg.entries?.view, 'entries.view'));
-    rollupInput['view/index'] = viewEntry;
-  }
-
-  await build({
-    configFile: false,
-    root,
-    plugins: [${frameworkPluginCall}],
-    resolve: {
-      alias: [
-        { find: '@plug-box/plugin-sdk', replacement: path.resolve(root, 'sdk/index.ts') },
-        { find: 'react/jsx-runtime', replacement: path.resolve(root, 'sdk/react-jsx-runtime.ts') },
-        { find: 'react/jsx-dev-runtime', replacement: path.resolve(root, 'sdk/react-jsx-runtime.ts') },
-        { find: /^react$/, replacement: path.resolve(root, 'sdk/react.ts') },
-      ],
-    },
-    build: {
-      outDir,
-      emptyOutDir: true,
-      sourcemap: false,
-      target: 'es2020',
-      rollupOptions: {
-        preserveEntrySignatures: 'strict',
-        input: rollupInput,
-        output: {
-          format: 'es',
-          entryFileNames: '[name].js',
-          chunkFileNames: 'chunks/[name]-[hash].js',
-          assetFileNames: 'assets/[name]-[hash][extname]',
-        },
-      },
-    },
-  });
-
-  const iconSource = typeof cfg.entries?.icon === 'string'
-    ? path.resolve(root, cfg.entries.icon)
-    : null;
-  const iconTargetRel = iconSource && fs.existsSync(iconSource)
-    ? '/plugins/' + pluginId + '/icon' + path.extname(iconSource)
-    : undefined;
-
-  if (iconSource && fs.existsSync(iconSource)) {
-    const target = path.resolve(outDir, 'icon' + path.extname(iconSource));
-    fs.copyFileSync(iconSource, target);
-  }
-
-  const manifest = {
-    id: pluginId,
-    name: ensureString(cfg.name, 'name'),
-    version: ensureString(cfg.version, 'version'),
-    description: typeof cfg.description === 'string' ? cfg.description : '',
-    activationEvents: Array.isArray(cfg.activationEvents) ? cfg.activationEvents : [],
-    view: hasView ? (cfg.view ?? undefined) : undefined,
-    commands: Array.isArray(cfg.commands) ? cfg.commands : [],
-    moduleUrl: '/plugins/' + pluginId + '/index.js',
-    viewUrl: hasView ? '/plugins/' + pluginId + '/view/index.js' : undefined,
-    icon: iconTargetRel,
-  };
-
-  fs.writeFileSync(
-    path.resolve(outDir, 'plugin.json'),
-    JSON.stringify(manifest, null, 2),
-    'utf8'
-  );
-
-  console.info('[plugbox-build] done:', outDir);
-}
-
-main().catch((error) => {
-  console.error(error);
-  process.exit(1);
-});
-`;
-}
-
-function sdkIndexTs() {
-  return `export interface PluginDisposable {
-  dispose(): void;
-}
-
-export type CapabilityMethod = (...args: unknown[]) => unknown | Promise<unknown>;
-export type CapabilityContract = Record<string, CapabilityMethod>;
-
-export interface CommandsCapability {
-  execute(commandId: string, ...args: unknown[]): Promise<unknown>;
-}
-
-export interface ViewsCapability {
-  activate(viewId: string): void;
-}
-
-export interface EventsCapability {
-  emit(event: string, payload?: unknown): void;
-  on(event: string, handler: (payload: unknown) => void): PluginDisposable;
-}
-
-export interface SettingsCapability {
-  get<T>(key: string): Promise<T | undefined>;
-  set(key: string, value: unknown): Promise<void>;
-  onChange<T>(key: string, handler: (value: T | undefined) => void): PluginDisposable;
-}
-
-export interface StorageCapability {
-  get<T>(key: string): Promise<T | undefined>;
-  set(key: string, value: unknown): Promise<void>;
-}
-
-export interface PluginCapabilityMap {
-  commands: CommandsCapability;
-  views: ViewsCapability;
-  events: EventsCapability;
-  settings: SettingsCapability;
-  storage: StorageCapability;
-}
-
-export type CapabilityById<K extends string> =
-  K extends keyof PluginCapabilityMap
-    ? PluginCapabilityMap[K]
-    : CapabilityContract;
-
-export interface PluginHostAPI {
-  readonly pluginId: string;
-  call<T = unknown>(method: string, params?: unknown): Promise<T>;
-  get<K extends string>(id: K): CapabilityById<K>;
-}
-
-export interface CommandExecutionContext {
-  api: PluginHostAPI;
-}
-
-export type PluginCommandHandler = (
-  context: CommandExecutionContext,
-  ...args: unknown[]
-) => Promise<unknown> | unknown;
-
-export interface PluginModule {
-  readonly pluginId: string;
-  commands?: Record<string, PluginCommandHandler>;
-  activate?: (api: PluginHostAPI) => Promise<void> | void;
-  deactivate?: (api: PluginHostAPI) => Promise<void> | void;
-}
+import type { PluginHostAPI } from './types/api';
 
 type GlobalWithApiFactory = typeof globalThis & {
-  __PLUG_BOX_API_FACTORY__?: () => Promise<PluginHostAPI>;
+  __MODUDESK_API_FACTORY__?: () => Promise<PluginHostAPI>;
 };
 
 function isValidApi(value: unknown): value is PluginHostAPI {
@@ -265,8 +103,8 @@ export async function createPluginApi(seedApi?: unknown): Promise<PluginHostAPI>
   cachedApiPromise = (async () => {
     const globalScope = globalThis as GlobalWithApiFactory;
 
-    if (typeof globalScope.__PLUG_BOX_API_FACTORY__ === 'function') {
-      const api = await globalScope.__PLUG_BOX_API_FACTORY__();
+    if (typeof globalScope.__MODUDESK_API_FACTORY__ === 'function') {
+      const api = await globalScope.__MODUDESK_API_FACTORY__();
       if (isValidApi(api)) return api;
     }
 
@@ -352,9 +190,149 @@ export function jsxDEV(type: any, props: any, key?: any) {
 `;
 }
 
+function writeSdkRuntimeFiles(targetDir) {
+  const sdkDir = path.join(targetDir, 'sdk');
+  writeFile(path.join(sdkDir, 'index.ts'), sdkRuntimeIndexTs());
+  writeFile(path.join(sdkDir, 'react.ts'), sdkReactTs());
+  writeFile(path.join(sdkDir, 'react-jsx-runtime.ts'), sdkReactJsxRuntimeTs());
+}
+
+function syncSdkTypes(targetDir) {
+  const sdkDir = path.join(targetDir, 'sdk');
+  const sdkTypesDir = path.join(sdkDir, 'types');
+  ensureDir(sdkTypesDir);
+
+  const capabilitySource = readRepoFile('src/domain/capability.ts');
+  const apiSource = readRepoFile('src/domain/api.ts');
+  const pluginModuleSource = readRepoFile('src/domain/protocol/plugin-module.protocol.ts')
+    .replace(`from '../api'`, `from './api'`);
+
+  writeFile(path.join(sdkTypesDir, 'capability.ts'), capabilitySource);
+  writeFile(path.join(sdkTypesDir, 'api.ts'), apiSource);
+  writeFile(path.join(sdkTypesDir, 'plugin-module.ts'), pluginModuleSource);
+
+  writeSdkRuntimeFiles(targetDir);
+}
+
+function buildScript(framework) {
+  const frameworkPluginImport = framework === 'vue'
+    ? "import vue from '@vitejs/plugin-vue';"
+    : "import react from '@vitejs/plugin-react';";
+
+  const frameworkPluginCall = framework === 'vue' ? 'vue()' : 'react()';
+
+  return `import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { build } from 'vite';
+${frameworkPluginImport}
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const root = path.resolve(__dirname, '..');
+const configPath = path.resolve(root, 'modudesk.config.json');
+
+function readConfig() {
+  const raw = fs.readFileSync(configPath, 'utf8');
+  return JSON.parse(raw);
+}
+
+function ensureString(value, field) {
+  if (typeof value !== 'string' || value.trim().length === 0) {
+    throw new Error(\`[modudesk-build] invalid field: \${field}\`);
+  }
+  return value.trim();
+}
+
+async function main() {
+  const cfg = readConfig();
+  const pluginId = ensureString(cfg.pluginId, 'pluginId');
+  const outRootDir = path.resolve(root, typeof cfg.outDir === 'string' ? cfg.outDir : 'dist');
+  const outDir = path.resolve(outRootDir, pluginId);
+
+  const moduleEntry = path.resolve(root, ensureString(cfg.entries?.module, 'entries.module'));
+  const hasView = !!cfg.view;
+  const rollupInput = { index: moduleEntry };
+
+  if (hasView) {
+    const viewEntry = path.resolve(root, ensureString(cfg.entries?.view, 'entries.view'));
+    rollupInput['view/index'] = viewEntry;
+  }
+
+  await build({
+    configFile: false,
+    root,
+    plugins: [${frameworkPluginCall}],
+    resolve: {
+      alias: [
+        { find: '@modudesk/plugin-sdk', replacement: path.resolve(root, 'sdk/index.ts') },
+        { find: 'react/jsx-runtime', replacement: path.resolve(root, 'sdk/react-jsx-runtime.ts') },
+        { find: 'react/jsx-dev-runtime', replacement: path.resolve(root, 'sdk/react-jsx-runtime.ts') },
+        { find: /^react$/, replacement: path.resolve(root, 'sdk/react.ts') },
+      ],
+    },
+    build: {
+      outDir,
+      emptyOutDir: true,
+      sourcemap: false,
+      target: 'es2020',
+      rollupOptions: {
+        preserveEntrySignatures: 'strict',
+        input: rollupInput,
+        output: {
+          format: 'es',
+          entryFileNames: '[name].js',
+          chunkFileNames: 'chunks/[name]-[hash].js',
+          assetFileNames: 'assets/[name]-[hash][extname]',
+        },
+      },
+    },
+  });
+
+  const iconSource = typeof cfg.entries?.icon === 'string'
+    ? path.resolve(root, cfg.entries.icon)
+    : null;
+  const iconTargetRel = iconSource && fs.existsSync(iconSource)
+    ? '/plugins/' + pluginId + '/icon' + path.extname(iconSource)
+    : undefined;
+
+  if (iconSource && fs.existsSync(iconSource)) {
+    const target = path.resolve(outDir, 'icon' + path.extname(iconSource));
+    fs.copyFileSync(iconSource, target);
+  }
+
+  const manifest = {
+    id: pluginId,
+    name: ensureString(cfg.name, 'name'),
+    version: ensureString(cfg.version, 'version'),
+    description: typeof cfg.description === 'string' ? cfg.description : '',
+    activationEvents: Array.isArray(cfg.activationEvents) ? cfg.activationEvents : [],
+    view: hasView ? (cfg.view ?? undefined) : undefined,
+    commands: Array.isArray(cfg.commands) ? cfg.commands : [],
+    moduleUrl: '/plugins/' + pluginId + '/index.js',
+    viewUrl: hasView ? '/plugins/' + pluginId + '/view/index.js' : undefined,
+    icon: iconTargetRel,
+  };
+
+  fs.writeFileSync(
+    path.resolve(outDir, 'plugin.json'),
+    JSON.stringify(manifest, null, 2),
+    'utf8'
+  );
+
+  console.info('[modudesk-build] done:', outDir);
+}
+
+main().catch((error) => {
+  console.error(error);
+  process.exit(1);
+});
+`;
+}
+
 function reactViewTsx(pluginId) {
   return `import React, { useEffect, useState } from 'react';
-import { createPluginApi } from '@plug-box/plugin-sdk';
+import { createPluginApi } from '@modudesk/plugin-sdk';
 import './style.css';
 
 export default function PluginView() {
@@ -381,7 +359,7 @@ export default function PluginView() {
 function vueViewVue(pluginId) {
   return `<script setup lang="ts">
 import { onMounted, ref } from 'vue';
-import { createPluginApi } from '@plug-box/plugin-sdk';
+import { createPluginApi } from '@modudesk/plugin-sdk';
 import './style.css';
 
 const result = ref('ready');
@@ -403,7 +381,7 @@ onMounted(async () => {
 }
 
 function moduleIndexTs(pluginId) {
-  return `import type { PluginModule } from '@plug-box/plugin-sdk';
+  return `import type { PluginModule } from '@modudesk/plugin-sdk';
 
 const pluginId = '${pluginId}';
 
@@ -449,12 +427,12 @@ function iconSvg() {
 `;
 }
 
-function plugboxConfig(pluginId) {
+function modudeskConfig(pluginId) {
   return JSON.stringify({
     pluginId,
     name: pluginId,
     version: '1.0.0',
-    description: 'Plugin scaffold generated by plugbox-plugin tool',
+    description: 'Plugin scaffold generated by modudesk-plugin tool',
     activationEvents: [
       `onCommand:${pluginId}.open`,
       `onView:${pluginId}.main`,
@@ -522,7 +500,7 @@ function tsConfig(framework) {
       lib: ['ES2020', 'DOM'],
       baseUrl: '.',
       paths: {
-        '@plug-box/plugin-sdk': ['./sdk/index.ts'],
+        '@modudesk/plugin-sdk': ['./sdk/index.ts'],
       },
     },
     include: ['src', 'sdk'],
@@ -541,22 +519,22 @@ function createProject(targetDir, framework, pluginIdOption) {
   ensureDir(targetDir);
   ensureDir(path.join(targetDir, 'src/view'));
   ensureDir(path.join(targetDir, 'scripts'));
-  ensureDir(path.join(targetDir, 'sdk'));
+  ensureDir(path.join(targetDir, 'sdk/types'));
 
   writeFile(path.join(targetDir, 'package.json'), packageJson(projectName, framework));
   writeFile(path.join(targetDir, 'tsconfig.json'), tsConfig(framework));
-  writeFile(path.join(targetDir, 'plugbox.config.json'), plugboxConfig(pluginId));
+  writeFile(path.join(targetDir, 'modudesk.config.json'), modudeskConfig(pluginId));
   writeFile(path.join(targetDir, 'scripts/build.mjs'), buildScript(framework));
-  writeFile(path.join(targetDir, 'sdk/index.ts'), sdkIndexTs());
-  writeFile(path.join(targetDir, 'sdk/react.ts'), sdkReactTs());
-  writeFile(path.join(targetDir, 'sdk/react-jsx-runtime.ts'), sdkReactJsxRuntimeTs());
+
+  syncSdkTypes(targetDir);
+
   writeFile(path.join(targetDir, 'src/index.ts'), moduleIndexTs(pluginId));
   writeFile(path.join(targetDir, 'src/view/style.css'), styleCss());
   writeFile(path.join(targetDir, 'src/icon.svg'), iconSvg());
 
   if (framework === 'vue') {
     writeFile(path.join(targetDir, 'src/view/index.vue'), vueViewVue(pluginId));
-    const cfgPath = path.join(targetDir, 'plugbox.config.json');
+    const cfgPath = path.join(targetDir, 'modudesk.config.json');
     const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
     cfg.entries.view = 'src/view/index.vue';
     fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2) + '\n', 'utf8');
@@ -564,19 +542,20 @@ function createProject(targetDir, framework, pluginIdOption) {
     writeFile(path.join(targetDir, 'src/view/index.tsx'), reactViewTsx(pluginId));
   }
 
-  console.info(`\n[plugbox-plugin] Project created: ${targetDir}`);
-  console.info('[plugbox-plugin] Next steps:');
+  console.info(`\n[modudesk-plugin] Project created: ${targetDir}`);
+  console.info('[modudesk-plugin] Next steps:');
   console.info('  1) cd ' + targetDir);
   console.info('  2) pnpm install');
   console.info('  3) pnpm build');
-  console.info('  4) copy dist/<pluginId> to app/public/plugins/<pluginId>');
+  console.info('  4) node ../tools/plugin-devtool/bin/modudesk-plugin.mjs sync-sdk .   # 宿主类型变更后可手动刷新');
+  console.info('  5) copy dist/<pluginId> to app/public/plugins/<pluginId>');
 }
 
 function runBuild(projectDir) {
   const targetDir = path.resolve(projectDir);
   const scriptPath = path.resolve(targetDir, 'scripts/build.mjs');
   if (!fs.existsSync(scriptPath)) {
-    throw new Error(`[plugbox-plugin] build script not found: ${scriptPath}`);
+    throw new Error(`[modudesk-plugin] build script not found: ${scriptPath}`);
   }
 
   const result = spawnSync(process.execPath, [scriptPath], {
@@ -584,14 +563,26 @@ function runBuild(projectDir) {
     stdio: 'inherit',
   });
   if (result.status !== 0) {
-    throw new Error(`[plugbox-plugin] build failed: ${targetDir}`);
+    throw new Error(`[modudesk-plugin] build failed: ${targetDir}`);
   }
+}
+
+function runSyncSdk(projectDir) {
+  const targetDir = path.resolve(projectDir);
+  const sdkDir = path.join(targetDir, 'sdk');
+  if (!fs.existsSync(sdkDir)) {
+    throw new Error(`[modudesk-plugin] sdk directory not found: ${sdkDir}`);
+  }
+
+  syncSdkTypes(targetDir);
+  console.info(`[modudesk-plugin] sdk types synced: ${targetDir}`);
 }
 
 function printHelp() {
   console.info('Usage:');
-  console.info('  node tools/plugin-devtool/bin/plugbox-plugin.mjs init <project-dir> [--framework react|vue] [--plugin-id <id>]');
-  console.info('  node tools/plugin-devtool/bin/plugbox-plugin.mjs build [project-dir]');
+  console.info('  node tools/plugin-devtool/bin/modudesk-plugin.mjs init <project-dir> [--framework react|vue] [--plugin-id <id>]');
+  console.info('  node tools/plugin-devtool/bin/modudesk-plugin.mjs build [project-dir]');
+  console.info('  node tools/plugin-devtool/bin/modudesk-plugin.mjs sync-sdk [project-dir]');
 }
 
 async function main() {
@@ -623,6 +614,12 @@ async function main() {
     return;
   }
 
+  if (command === 'sync-sdk') {
+    const projectDir = positional[0] ? path.resolve(process.cwd(), positional[0]) : process.cwd();
+    runSyncSdk(projectDir);
+    return;
+  }
+
   throw new Error('Unsupported command: ' + command);
 }
 
@@ -630,4 +627,3 @@ main().catch((error) => {
   console.error(error);
   process.exit(1);
 });
-

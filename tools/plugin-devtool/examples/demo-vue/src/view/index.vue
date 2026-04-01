@@ -1,6 +1,6 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import { onMounted, ref } from 'vue';
-import { createPluginApi } from '@plug-box/plugin-sdk';
+import { createPluginApi } from '@modudesk/plugin-sdk';
 import './style.css';
 
 const result = ref('ready');

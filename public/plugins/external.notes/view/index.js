@@ -16,7 +16,7 @@ async function createPluginApi() {
     return pluginApiPromise;
   }
 
-  const factory = window.__PLUG_BOX_API_FACTORY__;
+  const factory = window.__MODUDESK_API_FACTORY__;
   if (typeof factory === 'function') {
     pluginApiPromise = factory();
     return pluginApiPromise;

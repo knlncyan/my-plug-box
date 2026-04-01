@@ -3,10 +3,13 @@ import { Component, type ComponentType, type ErrorInfo, type ReactNode, useEffec
 import ReactDOM from 'react-dom/client';
 import '../../index.css';
 import type {
+    CommandsCapability,
     EventsCapability,
     PluginDisposable,
     PluginHostAPI,
     SettingsCapability,
+    StorageCapability,
+    ViewsCapability,
 } from '../../domain/api';
 import type { CapabilityById, CapabilityContract } from '../../domain/capability';
 import { createWindowRpcClient } from '../utils/communicationUtils';
@@ -15,7 +18,7 @@ import { importByUrl } from '../utils/pluginUtils';
 declare global {
     interface Window {
         React?: typeof React;
-        __PLUG_BOX_API_FACTORY__?: () => Promise<PluginHostAPI>;
+        __MODUDESK_API_FACTORY__?: () => Promise<PluginHostAPI>;
     }
 }
 
@@ -198,6 +201,33 @@ function createSandboxPluginApi(params: SandboxParams): PluginHostAPI {
     }
 
     const localCapabilityFactories: Record<string, () => CapabilityContract> = {
+        commands: () => {
+            const commands: CommandsCapability = {
+                execute: async (commandId: string, ...args: unknown[]): Promise<unknown> => {
+                    return call('commands.execute', { commandId, args });
+                },
+            };
+            return commands as unknown as CapabilityContract;
+        },
+        views: () => {
+            const views: ViewsCapability = {
+                activate: (viewId: string): void => {
+                    void call('views.activate', { viewId });
+                },
+            };
+            return views as unknown as CapabilityContract;
+        },
+        storage: () => {
+            const storage: StorageCapability = {
+                get: async function <T>(key: string): Promise<T | undefined> {
+                    return call<T | undefined>('storage.get', { key });
+                },
+                set: async (key: string, value: unknown): Promise<void> => {
+                    await call('storage.set', { key, value });
+                },
+            };
+            return storage as unknown as CapabilityContract;
+        },
         settings: () => {
             const settings: SettingsCapability = {
                 get: async function <T>(key: string): Promise<T | undefined> {
@@ -356,7 +386,7 @@ function bootstrap(): void {
     window.React = React;
 
     const pluginApi = createSandboxPluginApi(params);
-    window.__PLUG_BOX_API_FACTORY__ = async () => pluginApi;
+    window.__MODUDESK_API_FACTORY__ = async () => pluginApi;
 
     const root = document.getElementById('root');
     if (!root) {

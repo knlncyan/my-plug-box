@@ -1,11 +1,22 @@
 ﻿import service from '../../api/plugin.service';
-import type { CommandMeta } from '../../domain/protocol/plugin-catalog.protocol';
+import type { CommandMeta } from '../../domain/protocol/plugin-entity.protocol';
 import type {
     GlobalShortcutSyncResult,
     GlobalShortcutTriggeredPayload,
-} from '../../domain/protocol/global-shortcut.protocol';
-import type { PluginViewLocalShortcutKeydownPayload } from '../../domain/protocol/plugin-view-rpc.protocol';
+} from '../../domain/protocol/shortcut.protocol';
 import { PluginSettingService } from './PluginSettingService';
+
+interface PluginViewLocalShortcutKeydownPayload {
+    code: string;
+    ctrlKey: boolean;
+    altKey: boolean;
+    shiftKey: boolean;
+    metaKey: boolean;
+    repeat: boolean;
+    isComposing: boolean;
+    defaultPrevented: boolean;
+    targetIsEditable: boolean;
+}
 
 interface CommandKeybindingServiceDeps {
     pluginSettingService: PluginSettingService;

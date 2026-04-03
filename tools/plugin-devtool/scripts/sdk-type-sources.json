@@ -13,8 +13,8 @@
       "path": "src/domain/protocol/plugin-module.protocol.ts",
       "replace": [
         {
-          "from": "from '../api'",
-          "to": "from './api'"
+          "from": "from '../capability'",
+          "to": "from './capability'"
         }
       ]
     }

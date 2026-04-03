@@ -1,4 +1,4 @@
-import type { CommandMeta, PluginEntry } from '../../domain/protocol/plugin-catalog.protocol';
+import type { CommandMeta, PluginEntry } from '../../domain/protocol/plugin-entity.protocol';
 import service from '../../api/plugin.service';
 
 /**

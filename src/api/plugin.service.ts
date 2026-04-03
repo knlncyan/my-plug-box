@@ -5,8 +5,8 @@ import api from '@/lib/api';
 import type {
     ApiResponse,
     PluginEntry
-} from '../domain/protocol/plugin-catalog.protocol';
-import type { GlobalShortcutSyncResult } from '../domain/protocol/global-shortcut.protocol';
+} from '../domain/protocol/plugin-entity.protocol';
+import type { GlobalShortcutSyncResult } from '../domain/protocol/shortcut.protocol';
 
 class PluginService {
     /**

@@ -4,7 +4,7 @@ import type {
     ExecuteCommandPipelineOptions,
     PluginRuntimeSnapshot,
 } from '../../domain/runtime';
-import type { PluginEntry } from '../../domain/protocol/plugin-catalog.protocol';
+import type { PluginEntry } from '../../domain/protocol/plugin-entity.protocol';
 import { PluginDisposable } from '../PluginDisposable';
 import { PluginRuntimeCatalogService } from './PluginRuntimeCatalogService';
 import { WorkerSandboxService } from './WorkerSandboxService';

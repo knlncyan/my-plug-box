@@ -2,8 +2,7 @@
 import { container } from '.';
 import { WorkerSandboxService } from './service/WorkerSandboxService';
 import { createWindowRpcServer } from './utils/communicationUtils';
-import type { PluginEntry } from '../domain/protocol/plugin-catalog.protocol';
-import type { PluginViewInvokeHostMethodPayload } from '../domain/protocol/plugin-view-rpc.protocol';
+import type { PluginEntry } from '../domain/protocol/plugin-entity.protocol';
 
 interface Props {
     plugin: PluginEntry;
@@ -96,7 +95,7 @@ function PluginSandboxFrame({ plugin }: Props) {
 
         const unregs = [
             rpcServer.register('invokeHostMethod', (payload) => {
-                const data = asRecord(payload) as unknown as PluginViewInvokeHostMethodPayload;
+                const data = asRecord(payload) as { method: string; params?: unknown };
                 if (typeof data.method !== 'string' || data.method.length === 0) {
                     throw new Error('runtime bridge invokeHostMethod missing method');
                 }

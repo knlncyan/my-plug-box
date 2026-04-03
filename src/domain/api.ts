@@ -1,6 +1,4 @@
-﻿import type { CapabilityById } from './capability';
-
-export interface PluginDisposable {
+﻿export interface PluginDisposable {
     dispose(): void;
 }
 
@@ -36,15 +34,4 @@ declare module './capability' {
         settings: SettingsCapability;
         storage: StorageCapability;
     }
-}
-
-export interface PluginHostAPI {
-    readonly pluginId: string;
-    /**
-     * 通用能力调用入口：
-     * - call: method + params 方式，适合轻量扩展。
-     * - get: 类型化能力访问，适合长期维护和 IDE 提示。
-     */
-    call<T = unknown>(method: string, params?: unknown): Promise<T>;
-    get<K extends string>(id: K): CapabilityById<K>;
 }

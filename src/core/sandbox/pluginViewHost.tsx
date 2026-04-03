@@ -6,7 +6,6 @@ import type {
     CommandsCapability,
     EventsCapability,
     PluginDisposable,
-    PluginHostAPI,
     SettingsCapability,
     StorageCapability,
     ViewsCapability,
@@ -14,6 +13,7 @@ import type {
 import type { CapabilityById, CapabilityContract } from '../../domain/capability';
 import { createWindowRpcClient } from '../utils/communicationUtils';
 import { importByUrl } from '../utils/pluginUtils';
+import { PluginHostAPI } from '@/domain/protocol';
 
 declare global {
     interface Window {

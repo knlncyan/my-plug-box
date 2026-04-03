@@ -1,4 +1,4 @@
-import type { PluginEntry } from './protocol/plugin-catalog.protocol';
+import type { PluginEntry } from './protocol/plugin-entity.protocol';
 
 /**
  * 命令执行可选参数：

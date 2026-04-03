@@ -1,7 +1,6 @@
 import type {
     CommandsCapability,
     EventsCapability,
-    PluginHostAPI,
     SettingsCapability,
     StorageCapability,
     ViewsCapability,
@@ -15,6 +14,7 @@ import {
 import type {
     PluginModule,
     CommandExecutionContext,
+    PluginHostAPI,
 } from '../../domain/protocol/plugin-module.protocol';
 import { importByUrl } from '../utils/pluginUtils';
 

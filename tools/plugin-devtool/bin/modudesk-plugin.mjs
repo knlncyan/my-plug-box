@@ -600,9 +600,7 @@ async function main() {
             throw new Error('Missing project directory');
         }
 
-        const framework = String(
-            options.framework ?? (options.vue ? 'vue' : 'react')
-        ).toLowerCase();
+        const framework = String(options.framework).toLowerCase();
         if (framework !== 'react' && framework !== 'vue') {
             throw new Error('framework must be react or vue');
         }

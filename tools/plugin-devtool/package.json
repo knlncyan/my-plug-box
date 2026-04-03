@@ -7,7 +7,8 @@
     "modudesk-plugin": "./bin/modudesk-plugin.mjs"
   },
   "scripts": {
-    "update:sdk-types": "node ./scripts/update-sdk-types.mjs",
+    "update:sdk": "node ./scripts/update-sdk-types.mjs",
+    "init:react": "node ./bin/modudesk-plugin.mjs init ./my_plugin --framework=react --plugin-id=my.plugin",
     "build:executables": "node ./scripts/build-executables.mjs",
     "build:executables:all": "node ./scripts/build-executables.mjs --targets=windows,linux,macos"
   },

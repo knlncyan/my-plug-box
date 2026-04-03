@@ -1,0 +1,8 @@
+.demo-view-root {
+  box-sizing: border-box;
+  height: 100%;
+  padding: 16px;
+  background: linear-gradient(135deg, #f0f9ff, #e0f2fe);
+  color: #0f172a;
+  font-family: "Segoe UI", "PingFang SC", sans-serif;
+}

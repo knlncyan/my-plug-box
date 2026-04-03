@@ -1,11 +1,3 @@
-import type {
-    CommandsCapability,
-    EventsCapability,
-    SettingsCapability,
-    StorageCapability,
-    ViewsCapability,
-} from '../../domain/api';
-import type { CapabilityById, CapabilityContract } from '../../domain/capability';
 import {
     createWorkerRpcClient,
     createWorkerRpcServer,
@@ -17,6 +9,8 @@ import type {
     PluginHostAPI,
 } from '../../domain/protocol/plugin-module.protocol';
 import { importByUrl } from '../utils/pluginUtils';
+import { CapabilityById, CapabilityContract } from '@/domain/capability/capability';
+import { CommandsCapability, EventsCapability, SettingsCapability, StorageCapability, ViewsCapability } from '@/domain/capability/base.capability';
 
 const WORKER_RPC_CHANNEL = 'plugin-worker-runtime';
 

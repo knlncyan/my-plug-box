@@ -79,12 +79,12 @@ function main() {
     sourceMap[id] = filePath;
   }
 
-  const requiredIds = ['capability', 'api', 'pluginModule'];
-  for (const id of requiredIds) {
-    if (typeof bundled[id] !== 'string') {
-      throw new Error(`[update-sdk-types] missing required source id: ${id}`);
-    }
-  }
+  // const requiredIds = ['capability', 'api', 'pluginModule'];
+  // for (const id of requiredIds) {
+  //   if (typeof bundled[id] !== 'string') {
+  //     throw new Error(`[update-sdk-types] missing required source id: ${id}`);
+  //   }
+  // }
 
   const payload = {
     generatedAt: new Date().toISOString(),

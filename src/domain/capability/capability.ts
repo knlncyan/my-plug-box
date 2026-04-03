@@ -1,4 +1,4 @@
-﻿/**
+/**
  * 能力系统通用类型：
  * - `CapabilityContract` 表示一组可调用的宿主能力对象。
  * - `PluginCapabilityMap` 允许业务侧通过声明合并补充强类型能力映射。
@@ -13,14 +13,10 @@ export type CapabilityContract = Record<string, unknown>;
  */
 export interface PluginCapabilityMap { }
 
-export type CapabilityById<K extends string> =
-    K extends keyof PluginCapabilityMap
-    ? PluginCapabilityMap[K]
-    : CapabilityContract;
+export type CapabilityById<K extends string> = K extends keyof PluginCapabilityMap ? PluginCapabilityMap[K] : CapabilityContract;
 
 export interface CapabilityContext {
     pluginId: string;
 }
 
-export type CapabilityFactory<T = CapabilityContract> =
-    (context: CapabilityContext) => T;
+export type CapabilityFactory<T = CapabilityContract> = (context: CapabilityContext) => T;

@@ -1,4 +1,4 @@
-﻿export interface PluginDisposable {
+export interface PluginDisposable {
     dispose(): void;
 }
 
@@ -26,7 +26,7 @@ export interface StorageCapability {
     set(key: string, value: unknown): Promise<void>;
 }
 
-declare module './capability' {
+declare module './capability.ts' {
     interface PluginCapabilityMap {
         commands: CommandsCapability;
         views: ViewsCapability;

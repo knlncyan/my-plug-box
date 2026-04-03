@@ -2,18 +2,11 @@ import * as React from 'react';
 import { Component, type ComponentType, type ErrorInfo, type ReactNode, useEffect, useState } from 'react';
 import ReactDOM from 'react-dom/client';
 import '../../index.css';
-import type {
-    CommandsCapability,
-    EventsCapability,
-    PluginDisposable,
-    SettingsCapability,
-    StorageCapability,
-    ViewsCapability,
-} from '../../domain/api';
-import type { CapabilityById, CapabilityContract } from '../../domain/capability';
 import { createWindowRpcClient } from '../utils/communicationUtils';
 import { importByUrl } from '../utils/pluginUtils';
 import { PluginHostAPI } from '@/domain/protocol';
+import { CapabilityById, CapabilityContract } from '@/domain/capability/capability';
+import { CommandsCapability, EventsCapability, SettingsCapability, StorageCapability, ViewsCapability } from '@/domain/capability/base.capability';
 
 declare global {
     interface Window {
@@ -236,7 +229,7 @@ function createSandboxPluginApi(params: SandboxParams): PluginHostAPI {
                 set: async (key: string, value: unknown): Promise<void> => {
                     await call('settings.set', { key, value });
                 },
-                onChange: function <T>(key: string, handler: (value: T | undefined) => void): PluginDisposable {
+                onChange: function <T>(key: string, handler: (value: T | undefined) => void) {
                     let watchers = settingWatchers.get(key);
                     if (!watchers) {
                         watchers = new Set();
@@ -264,7 +257,7 @@ function createSandboxPluginApi(params: SandboxParams): PluginHostAPI {
                 emit: (eventName: string, payload?: unknown): void => {
                     void call('events.emit', { event: eventName, payload });
                 },
-                on: (eventName: string, handler: (payload: unknown) => void): PluginDisposable => {
+                on: (eventName: string, handler: (payload: unknown) => void) => {
                     let watchers = eventWatchers.get(eventName);
                     if (!watchers) {
                         watchers = new Set();

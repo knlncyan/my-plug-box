@@ -4,109 +4,65 @@ import path from 'node:path';
 import process from 'node:process';
 import { spawnSync } from 'node:child_process';
 
-const scriptDir =
-  typeof __dirname === 'string'
-    ? __dirname
-    : (process.argv[1] ? path.dirname(path.resolve(process.argv[1])) : process.cwd());
+const scriptDir = typeof __dirname === 'string' ? __dirname : (process.argv[1] ? path.dirname(path.resolve(process.argv[1])) : process.cwd());
 const SDK_TYPES_BUNDLE_PATH = path.resolve(scriptDir, 'modudesk-sdk-types.json');
-const EMBEDDED_SDK_TYPES_BUNDLE =
-  typeof globalThis !== 'undefined'
-  && globalThis.__MODUDESK_SDK_TYPES_BUNDLE__
-  && typeof globalThis.__MODUDESK_SDK_TYPES_BUNDLE__ === 'object'
-    ? globalThis.__MODUDESK_SDK_TYPES_BUNDLE__
-    : null;
 
 function parseArgs(argv) {
-  const args = [...argv];
-  const command = args.shift();
-  const positional = [];
-  const options = {};
+    const args = [...argv];
+    const command = args.shift();
+    const positional = [];
+    const options = {};
 
-  while (args.length > 0) {
-    const token = args.shift();
-    if (!token) break;
-    if (token.startsWith('--')) {
-      const [k, v] = token.slice(2).split('=');
-      if (v !== undefined) {
-        options[k] = v;
-      } else {
-        const next = args[0];
-        if (next && !next.startsWith('--')) {
-          options[k] = args.shift();
+    while (args.length > 0) {
+        const token = args.shift();
+        if (!token) break;
+        if (token.startsWith('--')) {
+            const [k, v] = token.slice(2).split('=');
+            if (v !== undefined) {
+                options[k] = v;
+            } else {
+                const next = args[0];
+                if (next && !next.startsWith('--')) {
+                    options[k] = args.shift();
+                } else {
+                    options[k] = true;
+                }
+            }
         } else {
-          options[k] = true;
+            positional.push(token);
         }
-      }
-    } else {
-      positional.push(token);
     }
-  }
 
-  return { command, positional, options };
+    return { command, positional, options };
 }
 
 function ensureDir(dir) {
-  fs.mkdirSync(dir, { recursive: true });
+    fs.mkdirSync(dir, { recursive: true });
 }
 
 function writeFile(filePath, content) {
-  ensureDir(path.dirname(filePath));
-  fs.writeFileSync(filePath, content, { encoding: 'utf8' });
+    ensureDir(path.dirname(filePath));
+    fs.writeFileSync(filePath, content, { encoding: 'utf8' });
 }
 
 function ensureString(value, field) {
-  if (typeof value !== 'string' || value.trim().length === 0) {
-    throw new Error(`[modudesk] invalid field: ${field}`);
-  }
-  return value.trim();
+    if (typeof value !== 'string' || value.trim().length === 0) {
+        throw new Error(`[modudesk] invalid field: ${field}`);
+    }
+    return value.trim();
 }
 
 function normalizePluginId(raw) {
-  const pluginId = ensureString(raw, 'pluginId');
-  if (!/^[a-zA-Z0-9][a-zA-Z0-9._-]*$/.test(pluginId)) {
-    throw new Error('[modudesk] pluginId must match /^[a-zA-Z0-9][a-zA-Z0-9._-]*$/');
-  }
-  return pluginId;
+    const pluginId = ensureString(raw, 'pluginId');
+    if (!/^[a-zA-Z0-9][a-zA-Z0-9._-]*$/.test(pluginId)) {
+        throw new Error('[modudesk] pluginId must match /^[a-zA-Z0-9][a-zA-Z0-9._-]*$/');
+    }
+    return pluginId;
 }
 
-function readBundledSdkTypes() {
-  if (
-    EMBEDDED_SDK_TYPES_BUNDLE
-    && typeof EMBEDDED_SDK_TYPES_BUNDLE.capability === 'string'
-    && typeof EMBEDDED_SDK_TYPES_BUNDLE.api === 'string'
-    && typeof EMBEDDED_SDK_TYPES_BUNDLE.pluginModule === 'string'
-  ) {
-    return EMBEDDED_SDK_TYPES_BUNDLE;
-  }
-
-  if (!fs.existsSync(SDK_TYPES_BUNDLE_PATH)) {
-    throw new Error(
-      `[modudesk-plugin] sdk type bundle not found: ${SDK_TYPES_BUNDLE_PATH}\n` +
-      'Please run: node tools/plugin-devtool/scripts/update-sdk-types.mjs'
-    );
-  }
-
-  const raw = fs.readFileSync(SDK_TYPES_BUNDLE_PATH, 'utf8');
-  const parsed = JSON.parse(raw);
-  if (
-    !parsed
-    || typeof parsed !== 'object'
-    || typeof parsed.capability !== 'string'
-    || typeof parsed.api !== 'string'
-    || typeof parsed.pluginModule !== 'string'
-  ) {
-    throw new Error(`[modudesk-plugin] invalid sdk type bundle: ${SDK_TYPES_BUNDLE_PATH}`);
-  }
-
-  return parsed;
-}
-
+// ============================================ SDK的基本资源 ==============================================
 function sdkRuntimeIndexTs() {
-  return `export * from './types/capability';
-export * from './types/api';
-export * from './types/plugin-module';
-
-import type { PluginHostAPI } from './types/api';
+    return `import type { PluginHostAPI } from './types/index';
 
 type GlobalWithApiFactory = typeof globalThis & {
   __MODUDESK_API_FACTORY__?: () => Promise<PluginHostAPI>;
@@ -151,7 +107,7 @@ export async function createViewApi(seedApi?: unknown): Promise<PluginHostAPI> {
 }
 
 function sdkReactTs() {
-  return `declare global {
+    return `declare global {
   interface Window {
     React?: any;
   }
@@ -190,7 +146,7 @@ export const useDeferredValue = <T,>(value: T) => getReact().useDeferredValue(va
 }
 
 function sdkReactJsxRuntimeTs() {
-  return `declare global {
+    return `declare global {
   interface Window {
     React?: any;
   }
@@ -220,38 +176,56 @@ export function jsxDEV(type: any, props: any, key?: any) {
 `;
 }
 
-function writeSdkRuntimeFiles(targetDir) {
-  const sdkDir = path.join(targetDir, 'sdk');
-  writeFile(path.join(sdkDir, 'index.ts'), sdkRuntimeIndexTs());
-  writeFile(path.join(sdkDir, 'react.ts'), sdkReactTs());
-  writeFile(path.join(sdkDir, 'react-jsx-runtime.ts'), sdkReactJsxRuntimeTs());
+function readBundledSdkTypes() {
+    // 读取类型定义文件
+    if (!fs.existsSync(SDK_TYPES_BUNDLE_PATH)) {
+        throw new Error(
+            `[modudesk-plugin] sdk type bundle not found: ${SDK_TYPES_BUNDLE_PATH}\n` +
+            'Please run: node tools/plugin-devtool/scripts/update-sdk-types.mjs'
+        );
+    }
+    const raw = fs.readFileSync(SDK_TYPES_BUNDLE_PATH, 'utf8');
+    // 判断类型定义文件是否正常
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object' || typeof parsed.source !== 'object') {
+        throw new Error(`[modudesk-plugin] invalid sdk type bundle: ${SDK_TYPES_BUNDLE_PATH}`);
+    }
+
+    return parsed;
 }
 
-function syncSdkTypes(targetDir) {
-  const sdkDir = path.join(targetDir, 'sdk');
-  const sdkTypesDir = path.join(sdkDir, 'types');
-  ensureDir(sdkTypesDir);
+function syncSdkContent(targetDir) {
+    // 1.写入基本sdk内容
+    const sdkDir = path.join(targetDir, 'sdk');
+    ensureDir(sdkDir);
+    writeFile(path.join(sdkDir, 'index.ts'), sdkRuntimeIndexTs());
+    writeFile(path.join(sdkDir, 'react.ts'), sdkReactTs());
+    writeFile(path.join(sdkDir, 'react-jsx-runtime.ts'), sdkReactJsxRuntimeTs());
 
-  const bundle = readBundledSdkTypes();
-  const capabilitySource = bundle.capability;
-  const apiSource = bundle.api;
-  const pluginModuleSource = bundle.pluginModule;
-
-  writeFile(path.join(sdkTypesDir, 'capability.ts'), capabilitySource);
-  writeFile(path.join(sdkTypesDir, 'api.ts'), apiSource);
-  writeFile(path.join(sdkTypesDir, 'plugin-module.ts'), pluginModuleSource);
-
-  writeSdkRuntimeFiles(targetDir);
+    // 2.写入类型定义sdk内容
+    const sdkTypesDir = path.join(sdkDir, 'types');
+    ensureDir(sdkTypesDir);
+    // 读取类型定义文件内容
+    const bundle = readBundledSdkTypes();
+    // 检查source
+    const typeSourceObj = bundle.source;
+    Object.entries(typeSourceObj).forEach(([key, _]) => {
+        const jsonStr = bundle?.[key];
+        if (typeof jsonStr == 'string') {
+            writeFile(path.join(sdkTypesDir, `${key}.ts`), jsonStr);
+        }
+    })
 }
 
+// ========================================== 创建项目的基本资源 ============================================
 function buildScript(framework) {
-  const frameworkPluginImport = framework === 'vue'
-    ? "import vue from '@vitejs/plugin-vue';"
-    : "import react from '@vitejs/plugin-react';";
+    const frameworkPluginImport = framework === 'vue'
+        ? "import vue from '@vitejs/plugin-vue';"
+        : "import react from '@vitejs/plugin-react';";
 
-  const frameworkPluginCall = framework === 'vue' ? 'vue()' : 'react()';
+    const frameworkPluginCall = framework === 'vue' ? 'vue()' : 'react()';
 
-  return `import fs from 'node:fs';
+    return `import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { build } from 'vite';
@@ -295,7 +269,7 @@ async function main() {
     plugins: [${frameworkPluginCall}],
     resolve: {
       alias: [
-        { find: '@modudesk/plugin-sdk', replacement: path.resolve(root, 'sdk/index.ts') },
+        { find: '@modudesk-sdk', replacement: path.resolve(root, 'sdk') },
         { find: 'react/jsx-runtime', replacement: path.resolve(root, 'sdk/react-jsx-runtime.ts') },
         { find: 'react/jsx-dev-runtime', replacement: path.resolve(root, 'sdk/react-jsx-runtime.ts') },
         { find: /^react$/, replacement: path.resolve(root, 'sdk/react.ts') },
@@ -361,8 +335,8 @@ main().catch((error) => {
 }
 
 function reactViewTsx(pluginId) {
-  return `import React, { useEffect, useState } from 'react';
-import { createPluginApi } from '@modudesk/plugin-sdk';
+    return `import React, { useEffect, useState } from 'react';
+import { createPluginApi } from '@modudesk-sdk/index';
 import './style.css';
 
 export default function PluginView() {
@@ -387,9 +361,9 @@ export default function PluginView() {
 }
 
 function vueViewVue(pluginId) {
-  return `<script setup lang="ts">
+    return `<script setup lang="ts">
 import { onMounted, ref } from 'vue';
-import { createPluginApi } from '@modudesk/plugin-sdk';
+import { createPluginApi } from '@modudesk-sdk/index';
 import './style.css';
 
 const result = ref('ready');
@@ -411,7 +385,7 @@ onMounted(async () => {
 }
 
 function moduleIndexTs(pluginId) {
-  return `import type { PluginModule } from '@modudesk/plugin-sdk';
+    return `import type { PluginModule } from '@modudesk-sdk/types';
 
 const pluginId = '${pluginId}';
 
@@ -436,7 +410,7 @@ export default plugin;
 }
 
 function styleCss() {
-  return `.demo-view-root {
+    return `.demo-view-root {
   box-sizing: border-box;
   height: 100%;
   padding: 16px;
@@ -448,7 +422,7 @@ function styleCss() {
 }
 
 function iconSvg() {
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64" fill="none">
+    return `<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64" fill="none">
   <rect x="4" y="4" width="56" height="56" rx="14" fill="#F0F9FF"/>
   <path d="M16 20h32v24H16z" fill="#0EA5E9"/>
   <path d="M22 28h20" stroke="#E0F2FE" stroke-width="3" stroke-linecap="round"/>
@@ -458,204 +432,202 @@ function iconSvg() {
 }
 
 function modudeskConfig(pluginId) {
-  return JSON.stringify({
-    pluginId,
-    name: pluginId,
-    version: '1.0.0',
-    description: 'Plugin scaffold generated by modudesk-plugin tool',
-    activationEvents: [
-      `onCommand:${pluginId}.open`,
-      `onView:${pluginId}.main`,
-    ],
-    view: {
-      id: `${pluginId}.main`,
-      title: 'Main View',
-      props: {
-        welcome: 'Hello from plugin view',
-      },
-    },
-    commands: [
-      { id: `${pluginId}.open`, description: 'Open plugin view' },
-      { id: `${pluginId}.ping`, description: 'Ping command' },
-    ],
-    entries: {
-      module: 'src/index.ts',
-      view: 'src/view/index.tsx',
-      icon: 'src/icon.svg',
-    },
-    outDir: 'dist',
-  }, null, 2) + '\n';
+    return JSON.stringify({
+        pluginId,
+        name: pluginId,
+        version: '1.0.0',
+        description: 'Plugin scaffold generated by modudesk-plugin tool',
+        activationEvents: [
+            `onCommand:${pluginId}.open`,
+            `onView:${pluginId}.main`,
+        ],
+        view: {
+            id: `${pluginId}.main`,
+            title: 'Main View',
+            props: {
+                welcome: 'Hello from plugin view',
+            },
+        },
+        commands: [
+            { id: `${pluginId}.open`, description: 'Open plugin view' },
+            { id: `${pluginId}.ping`, description: 'Ping command' },
+        ],
+        entries: {
+            module: 'src/index.ts',
+            view: 'src/view/index.tsx',
+            icon: 'src/icon.svg',
+        },
+        outDir: 'dist',
+    }, null, 2) + '\n';
 }
 
 function packageJson(projectName, framework) {
-  const frameworkDeps = framework === 'vue'
-    ? { vue: '^3.5.13' }
-    : { react: '^19.2.0', 'react-dom': '^19.2.0' };
-  const frameworkDevDeps = framework === 'vue'
-    ? { '@vitejs/plugin-vue': '^5.2.1', '@vue/compiler-sfc': '^3.5.13' }
-    : { '@vitejs/plugin-react': '^4.6.0', '@types/react': '^19.1.8', '@types/react-dom': '^19.1.6' };
+    const frameworkDeps = framework === 'vue'
+        ? { vue: '^3.5.13' }
+        : { react: '^19.2.0', 'react-dom': '^19.2.0' };
+    const frameworkDevDeps = framework === 'vue'
+        ? { '@vitejs/plugin-vue': '^5.2.1', '@vue/compiler-sfc': '^3.5.13' }
+        : { '@vitejs/plugin-react': '^4.6.0', '@types/react': '^19.1.8', '@types/react-dom': '^19.1.6' };
 
-  return JSON.stringify({
-    name: projectName,
-    private: true,
-    version: '0.1.0',
-    type: 'module',
-    scripts: {
-      build: 'node scripts/build.mjs',
-      typecheck: 'tsc --noEmit',
-    },
-    dependencies: {
-      ...frameworkDeps,
-    },
-    devDependencies: {
-      typescript: '^5.8.3',
-      vite: '^7.0.4',
-      ...frameworkDevDeps,
-    },
-  }, null, 2) + '\n';
+    return JSON.stringify({
+        name: projectName,
+        private: true,
+        version: '0.1.0',
+        type: 'module',
+        scripts: {
+            build: 'node scripts/build.mjs',
+            typecheck: 'tsc --noEmit',
+        },
+        dependencies: {
+            ...frameworkDeps,
+        },
+        devDependencies: {
+            typescript: '^5.8.3',
+            vite: '^7.0.4',
+            ...frameworkDevDeps,
+        },
+    }, null, 2) + '\n';
 }
 
 function tsConfig(framework) {
-  const jsx = framework === 'react' ? 'react-jsx' : 'preserve';
-  return JSON.stringify({
-    compilerOptions: {
-      target: 'ES2020',
-      module: 'ESNext',
-      moduleResolution: 'Bundler',
-      strict: true,
-      resolveJsonModule: true,
-      isolatedModules: true,
-      noEmit: true,
-      jsx,
-      lib: ['ES2020', 'DOM'],
-      baseUrl: '.',
-      paths: {
-        '@modudesk/plugin-sdk': ['./sdk/index.ts'],
-      },
-    },
-    include: ['src', 'sdk'],
-  }, null, 2) + '\n';
+    const jsx = framework === 'react' ? 'react-jsx' : 'preserve';
+    return JSON.stringify({
+        compilerOptions: {
+            target: 'ES2020',
+            module: 'ESNext',
+            moduleResolution: 'Bundler',
+            strict: true,
+            resolveJsonModule: true,
+            isolatedModules: true,
+            noEmit: true,
+            jsx,
+            lib: ['ES2020', 'DOM'],
+            baseUrl: '.',
+            paths: {
+                '@modudesk-sdk/*': ['./sdk/*'],
+            },
+        },
+        include: ['src', 'sdk'],
+    }, null, 2) + '\n';
 }
 
+// 创建项目
 function createProject(targetDir, framework, pluginIdOption) {
-  if (fs.existsSync(targetDir) && fs.readdirSync(targetDir).length > 0) {
-    throw new Error(`Target directory is not empty: ${targetDir}`);
-  }
+    if (fs.existsSync(targetDir) && fs.readdirSync(targetDir).length > 0) {
+        throw new Error(`Target directory is not empty: ${targetDir}`);
+    }
 
-  const projectName = path.basename(targetDir);
-  const defaultPluginId = `external.${projectName.replace(/[^a-zA-Z0-9.-]/g, '-').toLowerCase()}`;
-  const pluginId = normalizePluginId(pluginIdOption ?? defaultPluginId);
+    const projectName = path.basename(targetDir);
+    const defaultPluginId = `external.${projectName.replace(/[^a-zA-Z0-9.-]/g, '-').toLowerCase()}`;
+    const pluginId = normalizePluginId(pluginIdOption ?? defaultPluginId);
 
-  ensureDir(targetDir);
-  ensureDir(path.join(targetDir, 'src/view'));
-  ensureDir(path.join(targetDir, 'scripts'));
-  ensureDir(path.join(targetDir, 'sdk/types'));
+    ensureDir(targetDir);
+    ensureDir(path.join(targetDir, 'src/view'));
+    ensureDir(path.join(targetDir, 'scripts'));
+    ensureDir(path.join(targetDir, 'sdk/types'));
 
-  writeFile(path.join(targetDir, 'package.json'), packageJson(projectName, framework));
-  writeFile(path.join(targetDir, 'tsconfig.json'), tsConfig(framework));
-  writeFile(path.join(targetDir, 'modudesk.config.json'), modudeskConfig(pluginId));
-  writeFile(path.join(targetDir, 'scripts/build.mjs'), buildScript(framework));
+    writeFile(path.join(targetDir, 'package.json'), packageJson(projectName, framework));
+    writeFile(path.join(targetDir, 'tsconfig.json'), tsConfig(framework));
+    writeFile(path.join(targetDir, 'modudesk.config.json'), modudeskConfig(pluginId));
+    writeFile(path.join(targetDir, 'scripts/build.mjs'), buildScript(framework));
 
-  syncSdkTypes(targetDir);
+    syncSdkContent(targetDir);
 
-  writeFile(path.join(targetDir, 'src/index.ts'), moduleIndexTs(pluginId));
-  writeFile(path.join(targetDir, 'src/view/style.css'), styleCss());
-  writeFile(path.join(targetDir, 'src/icon.svg'), iconSvg());
+    writeFile(path.join(targetDir, 'src/index.ts'), moduleIndexTs(pluginId));
+    writeFile(path.join(targetDir, 'src/view/style.css'), styleCss());
+    writeFile(path.join(targetDir, 'src/icon.svg'), iconSvg());
 
-  if (framework === 'vue') {
-    writeFile(path.join(targetDir, 'src/view/index.vue'), vueViewVue(pluginId));
-    const cfgPath = path.join(targetDir, 'modudesk.config.json');
-    const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
-    cfg.entries.view = 'src/view/index.vue';
-    fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2) + '\n', 'utf8');
-  } else {
-    writeFile(path.join(targetDir, 'src/view/index.tsx'), reactViewTsx(pluginId));
-  }
+    if (framework === 'vue') {
+        writeFile(path.join(targetDir, 'src/view/index.vue'), vueViewVue(pluginId));
+        const cfgPath = path.join(targetDir, 'modudesk.config.json');
+        const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
+        cfg.entries.view = 'src/view/index.vue';
+        fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2) + '\n', 'utf8');
+    } else {
+        writeFile(path.join(targetDir, 'src/view/index.tsx'), reactViewTsx(pluginId));
+    }
 
-  console.info(`\n[modudesk-plugin] Project created: ${targetDir}`);
-  console.info('[modudesk-plugin] Next steps:');
-  console.info('  1) cd ' + targetDir);
-  console.info('  2) pnpm install');
-  console.info('  3) pnpm build');
-  console.info('  4) node ../tools/plugin-devtool/bin/modudesk-plugin.mjs sync-sdk .   # optional');
-  console.info('  5) copy dist/<pluginId> to app/public/plugins/<pluginId>');
+    console.info(`\n[modudesk-plugin] Project created: ${targetDir}`);
+    console.info('[modudesk-plugin] Next steps:');
+    console.info('  1) cd ' + targetDir);
+    console.info('  2) npm install');
+    console.info('  3) npm build');
+    console.info('  4) node ../tools/plugin-devtool/bin/modudesk-plugin.mjs sync-sdk .   # optional');
+    console.info('  5) copy dist/<pluginId> to app/public/plugins/<pluginId>');
 }
 
+// build插件项目
 function runBuild(projectDir) {
-  const targetDir = path.resolve(projectDir);
-  const scriptPath = path.resolve(targetDir, 'scripts/build.mjs');
-  if (!fs.existsSync(scriptPath)) {
-    throw new Error(`[modudesk-plugin] build script not found: ${scriptPath}`);
-  }
+    const targetDir = path.resolve(projectDir);
+    const scriptPath = path.resolve(targetDir, 'scripts/build.mjs');
+    if (!fs.existsSync(scriptPath)) {
+        throw new Error(`[modudesk-plugin] build script not found: ${scriptPath}`);
+    }
 
-  const result = spawnSync(process.execPath, [scriptPath], {
-    cwd: targetDir,
-    stdio: 'inherit',
-  });
-  if (result.status !== 0) {
-    throw new Error(`[modudesk-plugin] build failed: ${targetDir}`);
-  }
+    const result = spawnSync(process.execPath, [scriptPath], {
+        cwd: targetDir,
+        stdio: 'inherit',
+    });
+    if (result.status !== 0) {
+        throw new Error(`[modudesk-plugin] build failed: ${targetDir}`);
+    }
 }
 
+// 同步sdk
 function runSyncSdk(projectDir) {
-  const targetDir = path.resolve(projectDir);
-  const sdkDir = path.join(targetDir, 'sdk');
-  if (!fs.existsSync(sdkDir)) {
-    throw new Error(`[modudesk-plugin] sdk directory not found: ${sdkDir}`);
-  }
-
-  syncSdkTypes(targetDir);
-  console.info(`[modudesk-plugin] sdk types synced: ${targetDir}`);
+    const targetDir = path.resolve(projectDir);
+    syncSdkContent(targetDir);
+    console.info(`[modudesk-plugin] sdk types synced: ${targetDir}`);
 }
 
 function printHelp() {
-  console.info('Usage:');
-  console.info('  node tools/plugin-devtool/bin/modudesk-plugin.mjs init <project-dir> [--framework react|vue] [--plugin-id <id>]');
-  console.info('  node tools/plugin-devtool/bin/modudesk-plugin.mjs build [project-dir]');
-  console.info('  node tools/plugin-devtool/bin/modudesk-plugin.mjs sync-sdk [project-dir]');
+    console.info('Usage:');
+    console.info('  node tools/plugin-devtool/bin/modudesk-plugin.mjs init <project-dir> [--framework react|vue] [--plugin-id <id>]');
+    console.info('  node tools/plugin-devtool/bin/modudesk-plugin.mjs build [project-dir]');
+    console.info('  node tools/plugin-devtool/bin/modudesk-plugin.mjs sync-sdk [project-dir]');
 }
 
 async function main() {
-  const { command, positional, options } = parseArgs(process.argv.slice(2));
-  if (!command || command === '--help' || command === '-h') {
-    printHelp();
-    return;
-  }
-
-  if (command === 'init') {
-    const projectDir = positional[0];
-    if (!projectDir) {
-      throw new Error('Missing project directory');
+    const { command, positional, options } = parseArgs(process.argv.slice(2));
+    if (!command || command === '--help' || command === '-h') {
+        printHelp();
+        return;
     }
 
-    const framework = String(
-      options.framework ?? (options.vue ? 'vue' : 'react')
-    ).toLowerCase();
-    if (framework !== 'react' && framework !== 'vue') {
-      throw new Error('framework must be react or vue');
+    if (command === 'init') {
+        const projectDir = positional[0];
+        if (!projectDir) {
+            throw new Error('Missing project directory');
+        }
+
+        const framework = String(
+            options.framework ?? (options.vue ? 'vue' : 'react')
+        ).toLowerCase();
+        if (framework !== 'react' && framework !== 'vue') {
+            throw new Error('framework must be react or vue');
+        }
+
+        const pluginIdOption = options['plugin-id'] ? String(options['plugin-id']) : undefined;
+        createProject(path.resolve(process.cwd(), projectDir), framework, pluginIdOption);
+        return;
     }
 
-    const pluginIdOption = options['plugin-id'] ? String(options['plugin-id']) : undefined;
-    createProject(path.resolve(process.cwd(), projectDir), framework, pluginIdOption);
-    return;
-  }
+    if (command === 'build') {
+        const projectDir = positional[0] ? path.resolve(process.cwd(), positional[0]) : process.cwd();
+        runBuild(projectDir);
+        return;
+    }
 
-  if (command === 'build') {
-    const projectDir = positional[0] ? path.resolve(process.cwd(), positional[0]) : process.cwd();
-    runBuild(projectDir);
-    return;
-  }
+    if (command === 'sync-sdk') {
+        const projectDir = positional[0] ? path.resolve(process.cwd(), positional[0]) : process.cwd();
+        runSyncSdk(projectDir);
+        return;
+    }
 
-  if (command === 'sync-sdk') {
-    const projectDir = positional[0] ? path.resolve(process.cwd(), positional[0]) : process.cwd();
-    runSyncSdk(projectDir);
-    return;
-  }
-
-  throw new Error('Unsupported command: ' + command);
+    throw new Error('Unsupported command: ' + command);
 }
 
 main().catch((error) => {
-  console.error(error);
-  process.exit(1);
+    console.error(error);
+    process.exit(1);
 });

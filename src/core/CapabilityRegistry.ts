@@ -1,9 +1,4 @@
-import type {
-    CapabilityById,
-    CapabilityContext,
-    CapabilityContract,
-    CapabilityFactory,
-} from '../domain/capability';
+import { CapabilityById, CapabilityContext, CapabilityContract, CapabilityFactory } from "@/domain/capability/capability";
 
 /**
  * 宿主能力注册中心：

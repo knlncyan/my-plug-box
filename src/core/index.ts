@@ -5,10 +5,10 @@ import { PluginSettingService } from './service/PluginSettingService';
 import { PluginStorageService } from './service/PluginStorageService';
 import { WorkerSandboxService } from './service/WorkerSandboxService';
 import { CommandKeybindingService } from './service/CommandKeybindingService';
-import type { CapabilityById, CapabilityFactory } from '../domain/capability';
 import { CapabilityRegistry } from './CapabilityRegistry';
 import { PluginDisposable } from './PluginDisposable';
 import { PluginEventBus } from './PluginEventBus';
+import { CapabilityById, CapabilityFactory } from '../domain/capability/capability';
 
 /**
  * Core 入口：
@@ -70,4 +70,4 @@ export function registerCapability<K extends string>(
 export { useCoreRuntime } from './useCoreRuntime';
 
 export type { ExecuteCommandOptions, PluginRuntimeSnapshot } from '../domain/runtime';
-export type { CapabilityContext, CapabilityContract, CapabilityFactory, CapabilityById } from '../domain/capability';
+export type { CapabilityContext, CapabilityContract, CapabilityFactory, CapabilityById } from '../domain/capability/capability';

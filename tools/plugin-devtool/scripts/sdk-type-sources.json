@@ -1,23 +1,23 @@
 {
   "sources": [
     {
-      "id": "capability",
-      "path": "src/domain/capability.ts"
-    },
-    {
-      "id": "api",
-      "path": "src/domain/api.ts"
-    },
-    {
-      "id": "pluginModule",
+      "id": "index",
       "path": "src/domain/protocol/plugin-module.protocol.ts",
       "replace": [
         {
-          "from": "from '../capability'",
+          "from": "from '../capability/capability'",
           "to": "from './capability'"
         }
-      ]
+      ],
+      "description": "主要类型，不允许修改"
+    },
+    {
+      "id": "capability",
+      "path": "src/domain/capability/capability.ts"
+    },
+    {
+      "id": "base.capability",
+      "path": "src/domain/capability/base.capability.ts"
     }
   ]
 }
-

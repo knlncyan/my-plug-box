@@ -1,8 +1,11 @@
 ﻿use std::collections::HashMap;
 
-use crate::core::{
-    ApiResponse, CommandMeta, ExternalPluginManifestDto, PluginEntry, PluginManifest, PluginStatus,
-    ViewMeta,
+use crate::{
+    core::{
+        plugin_index_utils::ExternalPluginManifestDto, CommandMeta, PluginEntry, PluginManifest,
+        PluginStatus, ViewMeta,
+    },
+    utils::ApiResponse,
 };
 
 pub trait PluginManagerActivation {

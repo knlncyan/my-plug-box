@@ -1,8 +1,9 @@
-use crate::core::ApiResponse;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use tauri::{command, AppHandle, Emitter};
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
+
+use crate::utils::ApiResponse;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

@@ -1,4 +1,4 @@
-use crate::core::{ApiResponse, PluginEntry, PluginManager, PluginManagerActivation};
+use crate::{core::{PluginEntry, PluginManager, PluginManagerActivation}, utils::ApiResponse};
 use std::sync::Mutex;
 use tauri::{command, State};
 

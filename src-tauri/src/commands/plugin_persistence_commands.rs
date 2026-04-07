@@ -1,6 +1,9 @@
-﻿use crate::core::{
-    read_all_plugin_settings, read_plugin_storage_snapshot, write_plugin_setting,
-    write_plugin_storage_value, ApiResponse,
+﻿use crate::{
+    core::{
+        read_all_plugin_settings, read_plugin_storage_snapshot, write_plugin_setting,
+        write_plugin_storage_value,
+    },
+    utils::ApiResponse,
 };
 use serde_json::Value;
 use tauri::{command, AppHandle};

@@ -1,6 +1,6 @@
-﻿use crate::core::{
-    scan_external_plugin_manifests, ApiResponse, PluginEntry, PluginManager,
-    PluginManagerActivation,
+﻿use crate::{
+    core::{plugin_index_utils, PluginEntry, PluginManager, PluginManagerActivation},
+    utils::ApiResponse,
 };
 use std::sync::Mutex;
 use tauri::{command, AppHandle, State};
@@ -15,7 +15,7 @@ pub fn refresh_external_plugins(
     app: AppHandle,
     manager: State<'_, Mutex<PluginManager>>,
 ) -> ApiResponse<Vec<PluginEntry>> {
-    let manifests = match scan_external_plugin_manifests(app) {
+    let manifests = match plugin_index_utils::scan_external_plugin_manifests(app) {
         Ok(data) => data,
         Err(error) => return ApiResponse::error(error),
     };

@@ -552,8 +552,6 @@ function createProject(targetDir, framework, pluginIdOption) {
     console.info('  1) cd ' + targetDir);
     console.info('  2) npm install');
     console.info('  3) npm build');
-    console.info('  4) node ../tools/plugin-devtool/bin/modudesk-plugin.mjs sync-sdk .   # optional');
-    console.info('  5) copy dist/<pluginId> to app/public/plugins/<pluginId>');
 }
 
 // build插件项目
@@ -582,9 +580,8 @@ function runSyncSdk(projectDir) {
 
 function printHelp() {
     console.info('Usage:');
-    console.info('  node tools/plugin-devtool/bin/modudesk-plugin.mjs init <project-dir> [--framework react|vue] [--plugin-id <id>]');
-    console.info('  node tools/plugin-devtool/bin/modudesk-plugin.mjs build [project-dir]');
-    console.info('  node tools/plugin-devtool/bin/modudesk-plugin.mjs sync-sdk [project-dir]');
+    console.info('  xxxx init <project-dir> [--framework react|vue] [--plugin-id <id>]');
+    console.info('  xxxx build [project-dir]');
 }
 
 async function main() {

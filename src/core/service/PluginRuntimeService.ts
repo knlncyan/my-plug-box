@@ -1,4 +1,3 @@
-import service from '../../api/plugin.service';
 import type {
     ExecuteCommandOptions,
     ExecuteCommandPipelineOptions,
@@ -9,14 +8,14 @@ import { PluginDisposable } from '../PluginDisposable';
 import { PluginRuntimeCatalogService } from './PluginRuntimeCatalogService';
 import { WorkerSandboxService } from './WorkerSandboxService';
 import { activationEventMatches, isActivated, isDisabled } from '../utils/pluginUtils';
+import { CommandShortcutService } from './CommandShortcutService';
 
 type Listener = () => void;
 
 interface PluginRuntimeServiceDeps {
     pluginRuntimeCatalogService: PluginRuntimeCatalogService;
-    // pluginCommandService: PluginCommandService;
     workerSandboxService: WorkerSandboxService;
-    // commandKeybindingService: CommandKeybindingService;
+    commandShortcutService: CommandShortcutService;
     pluginDisposable: PluginDisposable;
 }
 
@@ -40,6 +39,8 @@ export class PluginRuntimeService {
             (viewId: string) => this.setActiveView(viewId)
 
         );
+        this.deps.commandShortcutService.init((commandId: string) => this.executeCommand(commandId));
+        this.deps.pluginRuntimeCatalogService.init(() => this.refreshAll());
     }
 
     subscribe = (listener: Listener): (() => void) => {
@@ -60,8 +61,8 @@ export class PluginRuntimeService {
     private async bootstrap(): Promise<void> {
         this.patch({ loading: true, error: null });
         try {
-            await this.deps.pluginRuntimeCatalogService.initLoadPlugins();
-            // await this.deps.commandKeybindingService.start();
+            await this.deps.pluginRuntimeCatalogService.start();
+            await this.deps.commandShortcutService.start();
             await this.refreshAll();
             this.patch({ loading: false, ready: true, error: null });
         } catch (error) {
@@ -71,7 +72,6 @@ export class PluginRuntimeService {
     }
 
     refresh = async (): Promise<void> => {
-        await this.deps.pluginRuntimeCatalogService.refreshFromBackend(true);
         await this.refreshAll();
     };
 
@@ -97,7 +97,7 @@ export class PluginRuntimeService {
 
         const plugin = this.deps.pluginRuntimeCatalogService.getPluginEntryById(pluginId);
         if (!plugin) {
-            this.patch({ error: `View not found: ${String(pluginId)}` });
+            this.patch({ error: `View's pluginId not found: ${String(pluginId)}` });
             return;
         }
 
@@ -106,12 +106,7 @@ export class PluginRuntimeService {
             return;
         }
 
-        if (isDisabled(plugin)) {
-            this.patch({ error: `Plugin "${plugin.pluginId}" is disabled.` });
-            return;
-        }
-
-        void this.ensurePluginReady(plugin.pluginId, `onView:${pluginId}`)
+        void this.ensurePluginReady(plugin, `onView:${pluginId}`)
             .then(() => {
                 this.patch({ activeViewPluginId: plugin.pluginId, error: null });
             })
@@ -149,14 +144,8 @@ export class PluginRuntimeService {
         const nextTrace = [...trace, commandId];
 
         const ownerPluginId = commandMeta.pluginId;
-        const ownerPlugin = this.deps.pluginRuntimeCatalogService.getPluginEntryById(ownerPluginId);
-        if (isDisabled(ownerPlugin)) {
-            throw new Error(`Plugin "${ownerPluginId}" is disabled`);
-        }
 
-        if (!isActivated(ownerPlugin)) {
-            await this.ensurePluginReady(ownerPluginId, `onCommand:${commandId}`);
-        }
+        await this.ensurePluginReady(ownerPluginId, `onCommand:${commandId}`);
 
         const result = await this.deps.workerSandboxService.executeCommand(
             ownerPluginId,
@@ -173,16 +162,11 @@ export class PluginRuntimeService {
             try {
                 await this.initPromise;
             } catch {
-                // 初始化失败时也继续关闭，避免资源泄漏。
                 console.log('程序初始化失败，仍然进行资源释放');
             }
         }
 
         this.activatedFrontendWorkerIds.clear();
-        // this.deps.commandKeybindingService.stop();
-        // this.deps.pluginCommandService.setCommandCatalog([]);
-        // this.deps.pluginCommandService.setPluginCatalog([]);
-        // this.keybindingChangeDisposer();
         await this.deps.pluginDisposable.dispose('__global__');
         this.patch({
             loading: false,
@@ -194,11 +178,10 @@ export class PluginRuntimeService {
     }
 
     // 校验事件激活
-    private canActivateByEvent(pluginId: string, activationEvent?: string): boolean {
-        const pluginEntry = this.deps.pluginRuntimeCatalogService.getPluginEntryById(pluginId);
-        const rules = pluginEntry?.manifest?.activationEvents ?? [];
+    private canActivateByEvent(plugin: PluginEntry, activationEvent?: string): boolean {
+        const rules = plugin?.manifest?.activationEvents ?? [];
 
-        if (rules.length === 0 || activationEvent == `onView:${pluginId}`) {
+        if (rules.length === 0 || activationEvent == `onView:${plugin.pluginId}`) {
             return true;
         }
         if (!activationEvent) {
@@ -207,42 +190,39 @@ export class PluginRuntimeService {
 
         return rules.some((rule) => activationEventMatches(rule, activationEvent));
     }
+
     /**
      * 校验激活事件并激活插件
-     * @param pluginId 
-     * @param activationEvent 
      */
-    private async ensurePluginReady(pluginId: string, activationEvent?: string): Promise<void> {
-        const current = this.snapshot.plugins.find((candidate) => candidate.pluginId === pluginId);
+    private async ensurePluginReady(idOrEntity: string | PluginEntry, activationEvent?: string): Promise<void> {
+        const current = typeof idOrEntity == 'string' ? this.deps.pluginRuntimeCatalogService.getPluginEntryById(idOrEntity) : idOrEntity;
+
         if (!current) {
-            throw new Error(`Plugin not found: ${pluginId}`);
+            throw new Error(`Plugin not found: ${idOrEntity}`);
         }
 
         if (isDisabled(current)) {
-            throw new Error(`Plugin "${pluginId}" is disabled`);
+            throw new Error(`Plugin "${current.pluginId}" is disabled`);
         }
 
         if (!isActivated(current)) {
-            if (!this.canActivateByEvent(pluginId, activationEvent)) {
+            if (!this.canActivateByEvent(current, activationEvent)) {
                 const trigger = activationEvent ?? '<none>';
-                throw new Error(`Plugin "${pluginId}" is not configured for activation event: ${trigger}`);
+                throw new Error(`Plugin "${current.pluginId}" is not configured for activation event: ${trigger}`);
             }
 
-            await service.activatePlugin(pluginId);
-            await this.refreshAll();
+            await this.deps.pluginRuntimeCatalogService.activatePlugin(current.pluginId);
         }
 
-        if (!this.activatedFrontendWorkerIds.has(pluginId)) {
-            await this.deps.workerSandboxService.activate(pluginId);
-            this.activatedFrontendWorkerIds.add(pluginId);
+        if (!this.activatedFrontendWorkerIds.has(current.pluginId)) {
+            await this.deps.workerSandboxService.activate(current.pluginId);
+            this.activatedFrontendWorkerIds.add(current.pluginId);
         }
     }
 
     // 尝试找到第一个可以激活视图的插件来显示视图
     private resolveActivePluginId(plugins: PluginEntry[], preferredPluginId: string | null): string | null {
-        const currentPlugin = preferredPluginId
-            ? plugins.find((candidate) => candidate.pluginId === preferredPluginId)
-            : null;
+        const currentPlugin = preferredPluginId ? plugins.find((candidate) => candidate.pluginId === preferredPluginId) : null;
 
         if (currentPlugin && isActivated(currentPlugin) && currentPlugin.viewMeta && !isDisabled(currentPlugin)) {
             return currentPlugin.pluginId;
@@ -260,17 +240,11 @@ export class PluginRuntimeService {
     }
 
     private async refreshAll(): Promise<void> {
-        const pluginEntries = await this.deps.pluginRuntimeCatalogService.getAllPluginEntry(true);
-        // const plugins = pluginsReponse.data ?? [];
-        // const commandsRaw = commandsReponse.data ?? [];
-
-        // this.commandCatalogRaw = commandsRaw;
-        // this.deps.commandKeybindingService.setCommandCatalog(commandsRaw);
-        // const commands = this.deps.commandKeybindingService.decorateCommands(commandsRaw);
+        const pluginEntries = await this.deps.pluginRuntimeCatalogService.getAllPluginEntry();
 
         this.patch({
             plugins: pluginEntries,
-            activeViewPluginId: this.resolveActivePluginId(pluginEntries, this.snapshot.activeViewPluginId),
+            activeViewPluginId: null,
             error: null,
         });
     }

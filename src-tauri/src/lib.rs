@@ -1,4 +1,4 @@
-﻿use crate::core::PluginManager;
+﻿use crate::core::{shortcut_manager::ShortcutManager, PluginManager};
 use std::sync::{
     atomic::{AtomicBool, Ordering},
     Mutex,
@@ -23,8 +23,10 @@ pub fn run() {
         .setup(|app| {
             // 1.1 创建管理器
             let manager = PluginManager::new();
+            let shortcut_manager = ShortcutManager::new();
             // 1.2 交给 Tauri 管理
             app.manage(Mutex::new(manager));
+            app.manage(Mutex::new(shortcut_manager));
             app.manage(state);
             // 2. 创建系统托盘
             utils::tray::create_tray(app.handle())?;
@@ -60,16 +62,21 @@ pub fn run() {
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
+            // 插件运行状态管理
             commands::refresh_external_plugins,
             commands::get_plugins_runtime,
             commands::activate_plugin,
             commands::deactivate_plugin,
             commands::disable_plugin,
-            commands::sync_global_shortcuts,
+            // 插件设置、存储管理
             commands::get_all_plugin_settings,
             commands::set_plugin_setting,
             commands::get_plugin_storage_snapshot,
-            commands::set_plugin_storage_value
+            commands::set_plugin_storage_value,
+            // 快捷键管理
+            commands::get_shortcut_list,
+            commands::update_shortcut,
+            commands::reset_shortcut
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

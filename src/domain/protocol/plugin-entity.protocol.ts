@@ -12,7 +12,7 @@ export interface ApiResponse<T = unknown> {
     data: T | null;
 }
 
-type PluginStatus =
+export type PluginStatus =
     | 'registered'
     | 'activating'
     | 'activated'

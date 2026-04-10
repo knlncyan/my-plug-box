@@ -11,37 +11,46 @@ import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/in
 import { useCoreRuntime } from "@/core"
 import { createPopup } from "@/lib/zustand"
 import { groupBy } from "lodash"
-import {
-    Search,
-    X,
-} from "lucide-react"
+import { Search, X } from "lucide-react"
 import { useMemo, useState } from "react"
 import { toast } from "sonner"
 
 export const useCommandPaletteDialog = createPopup();
 
 export default () => {
-    const { plugins, executeCommand } = useCoreRuntime();
+    const { getCommandsWithShorcut, executeSystemAndPluginCommand } = useCoreRuntime();
     const [query, setQuery] = useState('');
     const { open } = useCommandPaletteDialog.use();
 
+    const commandsMap = getCommandsWithShorcut();
+
     const commandGroups = useMemo(() => {
+        if (!commandsMap) return {};
         const normalized = query.trim().toLowerCase();
-        const commands = plugins.flatMap(it => it.commandsMeta);
-        const list = commands.sort((a, b) => a.id.localeCompare(b.id));
-        if (!normalized) return groupBy(list, 'pluginId');
-        const filteredCommands = list.filter((command) => (
+        const slist = [...commandsMap.system].sort((a, b) => a.id.localeCompare(b.id));
+        const plist = [...commandsMap.commands].sort((a, b) => a.id.localeCompare(b.id));
+
+        if (!normalized) return groupBy(slist.concat(plist), 'pluginId');
+
+        const sFiltered = slist.filter((command) => (
             command.id.toLowerCase().includes(normalized) ||
             command.description.toLowerCase().includes(normalized) ||
             command.pluginId.toLowerCase().includes(normalized)
         ));
-        return groupBy(filteredCommands, 'pluginId');
-    }, [plugins, query]);
+        const pFiltered = plist.filter((command) => (
+            command.id.toLowerCase().includes(normalized) ||
+            command.description.toLowerCase().includes(normalized) ||
+            command.pluginId.toLowerCase().includes(normalized)
+        ));
+        return groupBy(sFiltered.concat(pFiltered), 'pluginId');
+    }, [commandsMap, query]);
 
     async function runCommand(commandId: string): Promise<void> {
         try {
-            // console.log('执行命令', commandId)
-            await executeCommand(commandId);
+            if (commandId == 'system-command-pattern.open') {
+                return;
+            }
+            await executeSystemAndPluginCommand(commandId);
             useCommandPaletteDialog.hide();
         } catch (error) {
             toast.error(`[execute-commands] ${String(error)}`, { position: 'bottom-right' });
@@ -73,7 +82,7 @@ export default () => {
                     </InputGroup>
                 </div>
 
-                <CommandList>
+                <CommandList className="max-h-full">
                     <CommandEmpty>No results found.</CommandEmpty>
                     {Object.entries(commandGroups).map(([pluginId, items]) => (
                         <CommandGroup key={pluginId} heading={pluginId}>
@@ -85,22 +94,6 @@ export default () => {
                             ))}
                         </CommandGroup>
                     ))}
-
-                    {/* <CommandGroup heading="Suggestions"> */}
-                    {/* <CommandItem>
-                        <Calendar />
-                        <span>Calendar</span>
-                    </CommandItem>
-                    <CommandItem>
-                        <Smile />
-                        <span>Search Emoji</span>
-                    </CommandItem>
-                    <CommandItem disabled>
-                        <Calculator />
-                        <span>Calculator</span>
-                    </CommandItem> */}
-                    {/* </CommandGroup> */}
-                    {/* <CommandSeparator /> */}
                 </CommandList>
             </Command>
         </MyDialogPortal>

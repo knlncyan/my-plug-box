@@ -4,9 +4,11 @@ import { getCurrentWindow } from "@tauri-apps/api/window"
 import { useCoreRuntime } from "@/core";
 import lifecycleTrigger from "@/lib/lifecycleTrigger";
 import { listen } from "@tauri-apps/api/event";
+import { useAppViewStore } from "@/store/appViewStore";
 
 export default () => {
-    const { shutdown } = useCoreRuntime();
+    const { shutdown, setActiveView } = useCoreRuntime();
+    const setMainViewContent = useAppViewStore(state => state.setMainViewContent);
     const appWindow = getCurrentWindow();
 
     const minimize = () => {
@@ -49,14 +51,25 @@ export default () => {
         };
     }, []);
 
+    const backhome = () => {
+        setActiveView(null);
+        setMainViewContent(null);
+    }
+
     return (
         <div
             className="flex h-8 w-full items-center bg-neutral-150"
             style={{ WebkitAppRegion: 'drag' } as CSSProperties}
         >
             {/* 窗口标题（可选） */}
-            <img src="src/assets/tauri.svg" className="w-5 h-5 ml-2" />
-            <span className="ml-2 text-sm font-medium">ModuDesk</span>
+            <button
+                onClick={backhome}
+                className="flex px-2 h-8 items-center justify-center rounded hover:bg-black/5"
+            >
+                <img src="src/assets/tauri.svg" className="w-5 h-5" />
+                <span className="ml-2 text-sm font-medium">ModuDesk</span>
+            </button>
+
 
             {/* 窗口控制按钮 - 靠右 */}
             <div

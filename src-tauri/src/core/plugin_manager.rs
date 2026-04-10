@@ -18,8 +18,8 @@ pub trait PluginManagerActivation {
 pub struct PluginManager {
     _plugins: HashMap<String, PluginEntry>,
     // _contexts: HashMap<String, PluginContext>,
-    _global_views: HashMap<String, String>,
-    _global_commands: HashMap<String, String>,
+    // _global_views: HashMap<String, String>,
+    // _global_commands: HashMap<String, String>,
 }
 
 impl PluginManager {
@@ -27,8 +27,8 @@ impl PluginManager {
         PluginManager {
             _plugins: HashMap::new(),
             // _contexts: HashMap::new(),
-            _global_views: HashMap::new(),
-            _global_commands: HashMap::new(),
+            // _global_views: HashMap::new(),
+            // _global_commands: HashMap::new(),
         }
     }
 
@@ -72,11 +72,19 @@ impl PluginManager {
     pub fn list_plugins_runtime(&self) -> Vec<PluginEntry> {
         self._plugins.values().cloned().collect()
     }
+
+    pub fn lise_plugins_commands(&self) -> Vec<CommandMeta> {
+        self._plugins
+            .values()
+            .flat_map(|it| it.commands_meta.clone())
+            .collect()
+    }
 }
 
 impl PluginManagerActivation for PluginManager {
     // 注意：这里去掉了 Vec 的引用，直接消费它
     fn register(&mut self, plugin_dtos: Vec<ExternalPluginManifestDto>) -> Result<(), String> {
+        self._plugins.clear();
         for dto in plugin_dtos {
             // 如果已存在，跳过
             // if self._plugins.contains_key(&dto.id) {

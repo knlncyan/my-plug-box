@@ -1,6 +1,9 @@
 /// 核心插件领域模型，供命令处理与运行时共享。
 use serde::{Deserialize, Serialize};
 
+fn system() -> String {
+    "system".to_string()
+}
 // ========================== 一些插件元数据 =============================
 /// 视图元数据：描述一个插件贡献的页面。
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -17,26 +20,12 @@ pub struct ViewMeta {
 pub struct CommandMeta {
     pub id: String,
     pub description: String,
-    #[serde(default, rename = "pluginId")]
+    #[serde(default = "system", rename = "pluginId")]
     pub plugin_id: String,
-    #[serde(default)]
     pub shortcut: Option<String>,
     #[serde(default, rename = "shortcutScope")]
     pub shortcut_scope: Option<String>,
 }
-
-/// 插件简要信息（用于列表展示）。
-// #[derive(Debug, Clone, Serialize, Deserialize)]
-// pub struct PluginSummary {
-//     pub id: String,
-//     pub name: String,
-//     pub version: String,
-//     pub status: String, // "registered" | "activating" | "activated" | ...
-//     pub icon: Option<String>,
-//     pub error: Option<String>,
-//     pub description: Option<String>,
-//     pub view: Option<ViewMeta>,
-// }
 
 // ======================== 核心插件数据结构 =============================
 /**
@@ -52,15 +41,6 @@ pub struct PluginManifest {
     #[serde(default, rename = "activationEvents")]
     pub activation_events: Vec<String>,
 }
-
-/**
- * 插件必须实现的方法：生命周期钩子，不在此处管理状态。
- */
-// pub trait PluginActivation {
-//     // 必须带 &self，否则无法访问插件内部状态。
-//     fn activate(&self, context: &PluginContext) -> Result<(), String>;
-//     fn deactivate(&self) -> Result<(), String>;
-// }
 
 // 插件状态枚举。
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

@@ -10,6 +10,17 @@ import { useCommandPaletteDialog } from "../pages/commandPalette";
 import PluginManager from "../pages/pluginManager";
 import { MyTooltip } from "@/components/MyTooltip";
 import KeyboardShortcutsPage from "../pages/keyboardShortcuts";
+import { PluginStatus } from "@/domain/protocol";
+
+const PLUGIN_STATE_MAP: Record<PluginStatus, string> = {
+    registered: 'bg-yellow-500',
+    activating: 'bg-yellow-500',
+    activated: 'bg-green-500',
+    deactivating: 'bg-yellow-500',
+    inactive: 'bg-yellow-500',
+    disabled: 'bg-red-500',
+    error: 'bg-red-500'
+}
 
 export default () => {
     const { plugins, activeViewPluginId, setActiveView } = useCoreRuntime();
@@ -150,7 +161,7 @@ export default () => {
                                                     <ItemDescription className={`line-clamp-1 ${activeViewPluginId == plugin.manifest.id && 'text-neutral-300'}`}>{plugin.manifest.description}</ItemDescription>
                                                 </ItemContent>
                                                 {/* 增加一个表示状态的小圆点*/}
-                                                <div className="absolute bottom-2 right-2 w-1.5 h-1.5 rounded-full bg-green-500" />
+                                                <div className={`absolute bottom-2 right-2 w-1.5 h-1.5 rounded-full ${PLUGIN_STATE_MAP[plugin.status]}`} />
                                             </div>
                                         </Item>
                                     ))}
@@ -189,7 +200,7 @@ export default () => {
                                                 )}
                                             </div>
                                             {/* 状态点：位置保持不变 */}
-                                            <div className="absolute bottom-2 right-2 w-1.5 h-1.5 rounded-full bg-green-500" />
+                                            <div className={`absolute bottom-2 right-2 w-1.5 h-1.5 rounded-full ${PLUGIN_STATE_MAP[plugin.status]}`} />
                                         </Item>
                                     ))}
                                 </ItemGroup>
@@ -225,7 +236,7 @@ export default () => {
                                         {plugin.manifest.name?.trim().charAt(0).toUpperCase()}
                                     </span>
                                 )}
-                                <div className="absolute bottom-0.5 right-0.5 w-1 h-1 rounded-full bg-green-500" />
+                                <div className={`absolute bottom-0.5 right-0.5 w-1 h-1 rounded-full ${PLUGIN_STATE_MAP[plugin.status]}`} />
                             </div>
 
                         ))}

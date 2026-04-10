@@ -4,11 +4,11 @@ import { PluginRuntimeService } from './service/PluginRuntimeService';
 import { PluginSettingService } from './service/PluginSettingService';
 import { PluginStorageService } from './service/PluginStorageService';
 import { WorkerSandboxService } from './service/WorkerSandboxService';
-import { CommandKeybindingService } from './service/CommandKeybindingService';
 import { CapabilityRegistry } from './CapabilityRegistry';
 import { PluginDisposable } from './PluginDisposable';
 import { PluginEventBus } from './PluginEventBus';
 import { CapabilityById, CapabilityFactory } from '../domain/capability/capability';
+import { CommandShortcutService } from './service/CommandShortcutService';
 
 /**
  * Core 入口：
@@ -26,13 +26,6 @@ container.registerSingleton(
     () => new PluginSettingService(container.resolve(PluginEventBus))
 );
 container.registerSingleton(PluginStorageService, () => new PluginStorageService());
-container.registerSingleton(
-    CommandKeybindingService,
-    () =>
-        new CommandKeybindingService({
-            pluginSettingService: container.resolve(PluginSettingService),
-        })
-);
 
 container.registerSingleton(
     WorkerSandboxService,
@@ -47,13 +40,17 @@ container.registerSingleton(
         })
 );
 
+container.registerSingleton(CommandShortcutService, () => new CommandShortcutService({
+    pluginDisposable: container.resolve(PluginDisposable),
+}));
+
 container.registerSingleton(
     PluginRuntimeService,
     () =>
         new PluginRuntimeService({
             pluginRuntimeCatalogService: container.resolve(PluginRuntimeCatalogService),
             workerSandboxService: container.resolve(WorkerSandboxService),
-            // commandKeybindingService: container.resolve(CommandKeybindingService),
+            commandShortcutService: container.resolve(CommandShortcutService),
             pluginDisposable: container.resolve(PluginDisposable),
         })
 );

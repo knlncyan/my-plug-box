@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::fs;
-use std::path::{Path};
+use std::path::Path;
 use tauri::{AppHandle, Manager};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -90,7 +90,7 @@ fn normalize_manifest(
 }
 
 pub fn scan_external_plugin_manifests(
-    app: AppHandle,
+    app: &AppHandle,
 ) -> Result<Vec<ExternalPluginManifestDto>, String> {
     let app_data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
     let root = app_data_dir.join("plugins");

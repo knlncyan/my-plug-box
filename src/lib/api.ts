@@ -70,11 +70,7 @@ class API {
 
     private run<TResponse extends ApiLikeResponse>(context: ApiInterceptorContext<TResponse>): void {
         for (const interceptor of this.interceptors) {
-            try {
-                interceptor(context);
-            } catch (error) {
-                console.error('[api-interceptor] interceptor failed:', error);
-            }
+            interceptor(context);
         }
     }
 

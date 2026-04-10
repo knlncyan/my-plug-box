@@ -6,7 +6,6 @@ import type {
     ApiResponse,
     PluginEntry
 } from '../domain/protocol/plugin-entity.protocol';
-import type { GlobalShortcutSyncResult } from '../domain/protocol/shortcut.protocol';
 
 class PluginService {
     /**
@@ -42,18 +41,6 @@ class PluginService {
      */
     async disablePlugin(pluginId: string): Promise<void> {
         await api.invokeApi<void>('disable_plugin', { pluginId });
-    }
-
-    // async listPlugins(): Promise<ApiResponse<PluginSummary[]>> {
-    //     return await api.invokeApi<PluginSummary[]>('get_plugin_list');
-    // }
-
-    // async listCommands(): Promise<ApiResponse<CommandMeta[]>> {
-    //     return await api.invokeApi<CommandMeta[]>('get_registered_commands');
-    // }
-
-    async syncGlobalShortcuts(bindings: Record<string, string>): Promise<ApiResponse<GlobalShortcutSyncResult>> {
-        return await api.invokeApi<GlobalShortcutSyncResult>('sync_global_shortcuts', { bindings });
     }
 
     async getAllPluginSettings(): Promise<ApiResponse<Record<string, unknown>>> {

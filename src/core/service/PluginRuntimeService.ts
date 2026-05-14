@@ -36,7 +36,7 @@ export class PluginRuntimeService {
     constructor(private readonly deps: PluginRuntimeServiceDeps) {
         this.deps.workerSandboxService.init(
             (commandId: string, options: ExecuteCommandPipelineOptions, ...args: unknown[]) => this.executeCommandInternal(commandId, options, ...args),
-            (viewId: string) => this.setActiveView(viewId)
+            (viewId: string) => this.setActiveViewByViewId(viewId)
 
         );
         this.deps.commandShortcutService.init((commandId: string) => this.executeCommand(commandId));
@@ -72,7 +72,28 @@ export class PluginRuntimeService {
     }
 
     refresh = async (): Promise<void> => {
-        await this.refreshAll();
+        await this.deps.pluginRuntimeCatalogService.refreshRuntimeState();
+        await this.releaseStalePluginRuntime();
+    };
+
+    activatePlugin = async (pluginId: string): Promise<void> => {
+        await this.deps.pluginRuntimeCatalogService.activatePlugin(pluginId);
+    };
+
+    deactivatePlugin = async (pluginId: string): Promise<void> => {
+        await this.deps.pluginRuntimeCatalogService.deactivatePlugin(pluginId);
+        await this.releasePluginRuntime(pluginId);
+    };
+
+    disablePlugin = async (pluginId: string): Promise<void> => {
+        await this.deps.pluginRuntimeCatalogService.disablePlugin(pluginId);
+        await this.releasePluginRuntime(pluginId);
+    };
+
+    rescanPlugins = async (): Promise<void> => {
+        await this.deps.pluginRuntimeCatalogService.rescanPlugins();
+        await this.deps.commandShortcutService.refresh();
+        await this.releaseAllPluginRuntime();
     };
 
     shutdown = async (): Promise<void> => {
@@ -84,35 +105,49 @@ export class PluginRuntimeService {
     };
 
     // ========================================================= 上面的方法是基本核心方法 ==============================================================
+    private setActiveViewByViewId = (viewId: string): void => {
+        void this.openPluginViewByViewId(viewId)
+            .catch((error) => {
+                this.patch({ error: String(error) });
+            });
+    };
 
     /**
      * 激活相应插件的视图
      * @param pluginId 插件id
      */
-    setActiveView = (pluginId: string | null): void => {
-        if (pluginId === null) {
+    openPluginView = async (pluginId: string | null): Promise<void> => {
+        if (pluginId == null) {
             this.patch({ activeViewPluginId: null, error: null });
             return;
         }
-
         const plugin = this.deps.pluginRuntimeCatalogService.getPluginEntryById(pluginId);
         if (!plugin) {
-            this.patch({ error: `View's pluginId not found: ${String(pluginId)}` });
-            return;
+            throw new Error(`View's pluginId not found: ${String(pluginId)}`);
         }
 
         if (!plugin.viewMeta) {
-            this.patch({ error: `Plugin "${plugin.pluginId}" has no view entry.` });
-            return;
+            throw new Error(`Plugin "${plugin.pluginId}" has no view entry.`);
         }
 
-        void this.ensurePluginReady(plugin, `onView:${pluginId}`)
-            .then(() => {
-                this.patch({ activeViewPluginId: plugin.pluginId, error: null });
-            })
-            .catch((error) => {
-                this.patch({ error: String(error) });
-            });
+        await this.ensurePluginReady(plugin, `onView:${plugin.viewMeta.id}`);
+        this.patch({ activeViewPluginId: plugin.pluginId, error: null });
+    };
+
+    private openPluginViewByViewId = async (viewId: string): Promise<void> => {
+        const plugin = this.snapshot.plugins.find((candidate) => candidate.viewMeta?.id === viewId)
+            ?? (await this.deps.pluginRuntimeCatalogService.getAllPluginEntry()).find((candidate) => candidate.viewMeta?.id === viewId);
+
+        if (!plugin) {
+            throw new Error(`View not found: ${viewId}`);
+        }
+
+        if (!plugin.viewMeta) {
+            throw new Error(`Plugin "${plugin.pluginId}" has no view entry.`);
+        }
+
+        await this.ensurePluginReady(plugin, `onView:${viewId}`);
+        this.patch({ activeViewPluginId: plugin.pluginId, error: null });
     };
 
     executeCommand = async (
@@ -177,11 +212,51 @@ export class PluginRuntimeService {
         });
     }
 
+    private async releasePluginRuntime(pluginId: string): Promise<void> {
+        try {
+            await this.deps.workerSandboxService.deactivate(pluginId);
+        } catch (error) {
+            console.error(`[Runtime] Failed to release plugin runtime for ${pluginId}:`, error);
+        } finally {
+            this.activatedFrontendWorkerIds.delete(pluginId);
+        }
+
+        if (this.snapshot.activeViewPluginId === pluginId) {
+            this.patch({ activeViewPluginId: null });
+        }
+    }
+
+    private async releaseAllPluginRuntime(): Promise<void> {
+        const pluginIds = Array.from(this.activatedFrontendWorkerIds);
+        for (const pluginId of pluginIds) {
+            await this.releasePluginRuntime(pluginId);
+        }
+
+        if (this.snapshot.activeViewPluginId !== null) {
+            this.patch({ activeViewPluginId: null });
+        }
+    }
+
+    private async releaseStalePluginRuntime(): Promise<void> {
+        const pluginEntries = await this.deps.pluginRuntimeCatalogService.getAllPluginEntry();
+        const activePluginIds = new Set(
+            pluginEntries
+                .filter((plugin) => isActivated(plugin) && !isDisabled(plugin))
+                .map((plugin) => plugin.pluginId)
+        );
+
+        for (const pluginId of Array.from(this.activatedFrontendWorkerIds)) {
+            if (!activePluginIds.has(pluginId)) {
+                await this.releasePluginRuntime(pluginId);
+            }
+        }
+    }
+
     // 校验事件激活
     private canActivateByEvent(plugin: PluginEntry, activationEvent?: string): boolean {
         const rules = plugin?.manifest?.activationEvents ?? [];
 
-        if (rules.length === 0 || activationEvent == `onView:${plugin.pluginId}`) {
+        if (rules.length === 0) {
             return true;
         }
         if (!activationEvent) {
@@ -220,7 +295,7 @@ export class PluginRuntimeService {
         }
     }
 
-    // 尝试找到第一个可以激活视图的插件来显示视图
+    // 保留当前已选中的视图插件；若它已失效，则回退到空选择而不是强行切换。
     private resolveActivePluginId(plugins: PluginEntry[], preferredPluginId: string | null): string | null {
         const currentPlugin = preferredPluginId ? plugins.find((candidate) => candidate.pluginId === preferredPluginId) : null;
 
@@ -228,23 +303,16 @@ export class PluginRuntimeService {
             return currentPlugin.pluginId;
         }
 
-        const firstActivatedWithView = plugins.find(
-            (candidate) => isActivated(candidate) && !!candidate.viewMeta && !isDisabled(candidate)
-        );
-        if (firstActivatedWithView?.viewMeta) {
-            return firstActivatedWithView.pluginId;
-        }
-
-        const firstViewPlugin = plugins.find((candidate) => candidate.viewMeta && !isDisabled(candidate));
-        return firstViewPlugin?.pluginId ?? null;
+        return null;
     }
 
     private async refreshAll(): Promise<void> {
         const pluginEntries = await this.deps.pluginRuntimeCatalogService.getAllPluginEntry();
+        const activeViewPluginId = this.resolveActivePluginId(pluginEntries, this.snapshot.activeViewPluginId);
 
         this.patch({
             plugins: pluginEntries,
-            activeViewPluginId: null,
+            activeViewPluginId,
             error: null,
         });
     }

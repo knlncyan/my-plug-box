@@ -7,7 +7,7 @@ import { listen } from "@tauri-apps/api/event";
 import { useAppViewStore } from "@/store/appViewStore";
 
 export default () => {
-    const { shutdown, setActiveView } = useCoreRuntime();
+    const { shutdown, openPluginView } = useCoreRuntime();
     const setMainViewContent = useAppViewStore(state => state.setMainViewContent);
     const appWindow = getCurrentWindow();
 
@@ -52,7 +52,7 @@ export default () => {
     }, []);
 
     const backhome = () => {
-        setActiveView(null);
+        openPluginView(null);
         setMainViewContent(null);
     }
 

@@ -58,6 +58,22 @@ export class PluginRuntimeCatalogService {
         await this.refreshNewestState();
     }
 
+    refreshRuntimeState = async () => {
+        await this.ensureExternalManifestsLoaded();
+        if (!this.refreshExecutor) {
+            throw Error('RefreshExecutor 未初始化');
+        }
+        await this.refreshExecutor();
+    }
+
+    rescanPlugins = async () => {
+        await this.ensureExternalManifestsLoaded(true);
+        if (!this.refreshExecutor) {
+            throw Error('RefreshExecutor 未初始化');
+        }
+        await this.refreshExecutor();
+    }
+
     private refreshNewestState = async () => {
         await this.ensureExternalManifestsLoaded();
         if (!this.refreshExecutor) {
@@ -73,15 +89,16 @@ export class PluginRuntimeCatalogService {
      * @param reload 表示是否重新加载插件，不加载则只获取当前列表
      */
     private async ensureExternalManifestsLoaded(loadPluginFiles: boolean = false): Promise<void> {
-        this.pluginEntryById.clear();
-        this.commandById.clear();
-
         const response = loadPluginFiles ? await service.refreshExternalPlugins() : await service.getPluginsRuntime();
         const payload = response.data;
         if (!Array.isArray(payload)) {
             console.warn('[PluginRuntimeCatalog] backend plugin index must be an array');
             return;
         }
+
+        const nextPluginEntryById = new Map<string, PluginEntry>();
+        const nextCommandById = new Map<string, CommandMeta>();
+
         for (const raw of payload) {
             try {
                 if (!raw || typeof raw !== 'object') {
@@ -90,14 +107,18 @@ export class PluginRuntimeCatalogService {
                 if (typeof raw.pluginId !== 'string' || raw.pluginId.length === 0) {
                     throw new Error('Plugin manifest missing id');
                 }
-                if (!this.pluginEntryById.has(raw.pluginId)) {
-                    this.pluginEntryById.set(raw.pluginId, raw);
-                    raw.commandsMeta.forEach(it => this.commandById.set(it.id, it));
+                if (!nextPluginEntryById.has(raw.pluginId)) {
+                    nextPluginEntryById.set(raw.pluginId, raw);
+                    raw.commandsMeta.forEach(it => nextCommandById.set(it.id, it));
                 }
             } catch (error) {
                 console.warn('[PluginRuntimeCatalog] failed to process plugin manifest', error);
             }
         }
+
+        this.pluginEntryById.clear();
+        this.commandById.clear();
+        nextPluginEntryById.forEach((value, key) => this.pluginEntryById.set(key, value));
+        nextCommandById.forEach((value, key) => this.commandById.set(key, value));
     }
 }
-

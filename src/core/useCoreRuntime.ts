@@ -16,8 +16,12 @@ export function useCoreRuntime() {
     return {
         ...snapshot,
         executeCommand: coreRuntime.executeCommand,
-        setActiveView: coreRuntime.setActiveView,
+        openPluginView: coreRuntime.openPluginView,
         refresh: coreRuntime.refresh,
+        activatePlugin: coreRuntime.activatePlugin,
+        deactivatePlugin: coreRuntime.deactivatePlugin,
+        disablePlugin: coreRuntime.disablePlugin,
+        rescanPlugins: coreRuntime.rescanPlugins,
         shutdown: coreRuntime.shutdown,
         // 快捷键服务的方法
         refreshShortcuts: css.refresh,

@@ -23,7 +23,7 @@ const PLUGIN_STATE_MAP: Record<PluginStatus, string> = {
 }
 
 export default () => {
-    const { plugins, activeViewPluginId, setActiveView } = useCoreRuntime();
+    const { plugins, activeViewPluginId, openPluginView } = useCoreRuntime();
     // 侧边栏隐藏
     const hiddenAside = useAsideStateStore(it => it.hiddenAside);
     const toggleAside = useAsideStateStore(it => it.toggleAside);
@@ -42,9 +42,9 @@ export default () => {
 
     const selectViewPlugin = useCallback(
         (pluginId: string) => {
-            setActiveView(pluginId);
+            openPluginView(pluginId);
         },
-        [setActiveView]
+        [openPluginView]
     );
 
     const { activatedPlugins, handledPlugins } = useMemo(() => {

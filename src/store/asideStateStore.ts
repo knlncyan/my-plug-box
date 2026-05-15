@@ -7,14 +7,17 @@ export type AsideBarKeys = 'none' | 'plugs' | 'search' | 'tags'
 type PlugViewModes = 'list' | 'grid-small' | 'grid-medium'
 type PlugOrderKeys = 'name' | 'activate'
 interface AsideState {
+    hydrated: boolean;
     hiddenAside: boolean;
     hiddenBackend: boolean;
+    hiddenDisabled: boolean;
     asideBarKey: AsideBarKeys;
     plugViewMode: PlugViewModes;
     plugOrderKey: PlugOrderKeys;
 
     toggleAside: () => void;
     changeHiddenBackend: () => void;
+    changeHiddenDisabled: () => void;
     changeAsideBarKey: (val: AsideBarKeys) => void;
     changePlugViewMode: (val: PlugViewModes) => void;
     changePlugOrderKey: (val: PlugOrderKeys) => void;
@@ -25,8 +28,10 @@ interface AsideState {
 }
 
 const DEFAULT_STATE = {
+    hydrated: false,
     hiddenAside: false,
     hiddenBackend: false,
+    hiddenDisabled: false,
     asideBarKey: 'plugs' as const,
     plugViewMode: 'list' as const,
     plugOrderKey: 'activate' as const,
@@ -38,6 +43,7 @@ export const useAsideStateStore = create<AsideState>()((set, get) => ({
 
     toggleAside: () => set((state) => ({ hiddenAside: !state.hiddenAside })),
     changeHiddenBackend: () => set((state) => ({ hiddenBackend: !state.hiddenBackend })),
+    changeHiddenDisabled: () => set((state) => ({ hiddenDisabled: !state.hiddenDisabled })),
     changeAsideBarKey: (val) => set({ asideBarKey: val }),
     changePlugViewMode: (val) => set({ plugViewMode: val }),
     changePlugOrderKey: (val) => set({ plugOrderKey: val }),
@@ -49,8 +55,10 @@ export const useAsideStateStore = create<AsideState>()((set, get) => ({
             const asideSetting = saved?.['global.asideSetting'] as Record<string, any>;
             if (asideSetting) {
                 set({
+                    hydrated: true,
                     hiddenAside: asideSetting?.hiddenAside == 'true',
                     hiddenBackend: asideSetting?.hiddenBackend == 'true',
+                    hiddenDisabled: asideSetting?.hiddenDisabled == 'true',
                     asideBarKey:
                         asideSetting?.asideBarKey ?? DEFAULT_STATE.asideBarKey,
                     plugViewMode:
@@ -58,8 +66,11 @@ export const useAsideStateStore = create<AsideState>()((set, get) => ({
                     plugOrderKey:
                         asideSetting?.plugOrderKey ?? DEFAULT_STATE.plugOrderKey,
                 });
+            } else {
+                set({ hydrated: true });
             }
         } catch (e) {
+            set({ hydrated: true });
             console.warn('Failed to hydrate aside state', e);
         }
     },
@@ -70,6 +81,7 @@ export const useAsideStateStore = create<AsideState>()((set, get) => ({
             const settingsToSave = {
                 hiddenAside: String(state.hiddenAside),
                 hiddenBackend: String(state.hiddenBackend),
+                hiddenDisabled: String(state.hiddenDisabled),
                 asideBarKey: String(state.asideBarKey),
                 plugViewMode: String(state.plugViewMode),
                 plugOrderKey: String(state.plugOrderKey),

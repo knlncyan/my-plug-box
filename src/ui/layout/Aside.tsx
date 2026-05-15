@@ -22,13 +22,29 @@ const PLUGIN_STATE_MAP: Record<PluginStatus, string> = {
     error: 'bg-red-500'
 }
 
+const getPluginDisplayState = (isDisabled: boolean, isActive: boolean) => ({
+    container: [
+        isActive ? 'bg-neutral-700 text-white hover:bg-neutral-700!' : isDisabled ? '' : 'hover:bg-neutral-200!',
+        isDisabled ? (isActive ? 'border-dashed border-neutral-500/70 opacity-80' : 'border-dashed border-neutral-300 bg-neutral-50/80 text-neutral-500') : ''
+    ].filter(Boolean).join(' '),
+    clickable: isDisabled ? 'cursor-not-allowed' : 'cursor-pointer',
+    media: isDisabled ? 'opacity-60 grayscale' : '',
+    title: isDisabled ? (isActive ? 'text-neutral-100' : 'text-neutral-500') : '',
+    description: isDisabled ? (isActive ? 'text-neutral-300' : 'text-neutral-400') : '',
+    badge: isDisabled ? (isActive ? 'border-white/20 bg-white/10 text-white/80' : 'border-neutral-300 bg-white text-neutral-500') : '',
+    frame: isDisabled ? (isActive ? 'border-neutral-400/70' : 'border-neutral-300/90') : ''
+});
+
 export default () => {
     const { plugins, activeViewPluginId, openPluginView } = useCoreRuntime();
+    const hydrated = useAsideStateStore(it => it.hydrated);
     // 侧边栏隐藏
     const hiddenAside = useAsideStateStore(it => it.hiddenAside);
     const toggleAside = useAsideStateStore(it => it.toggleAside);
     // 隐藏后台插件（无视图插件）
     const hiddenBackend = useAsideStateStore(it => it.hiddenBackend);
+    // 隐藏已禁用插件
+    const hiddenDisabled = useAsideStateStore(it => it.hiddenDisabled);
     // 选中的功能键
     const asideBarKey = useAsideStateStore(it => it.asideBarKey);
     const changeAsideBarKey = useAsideStateStore(it => it.changeAsideBarKey);
@@ -51,14 +67,16 @@ export default () => {
         const activatedPlugins = plugins.filter(it => it.status === 'activated').map(it => it.manifest);
         // 过滤
         const filteredPlugins = plugins.filter(it => {
-            return (!hiddenBackend || it.viewMeta) && (it.manifest.name.includes(search) || it.manifest.description?.includes(search))
+            return (!hiddenBackend || it.viewMeta)
+                && (!hiddenDisabled || it.status !== 'disabled')
+                && (it.manifest.name.includes(search) || it.manifest.description?.includes(search))
         });
         // 排序
         const handledPlugins = plugOrderKey == 'activate'
             ? filteredPlugins.sort((a, _) => (a.status === 'activated' ? -1 : 1))
             : filteredPlugins.sort((a, b) => a.manifest.name.localeCompare(b.manifest.name));
         return { activatedPlugins, handledPlugins };
-    }, [plugins, hiddenBackend, plugOrderKey, search]);
+    }, [plugins, hiddenBackend, hiddenDisabled, plugOrderKey, search]);
 
     // 功能键被选中
     const handleAsideBarKey = (key: AsideBarKeys) => {
@@ -71,7 +89,11 @@ export default () => {
         setSearch('');
     }
     // 插件被选中
-    const handlePlugSelect = (pluginId: string) => {
+    const handlePlugSelect = (pluginId: string, isDisabled: boolean) => {
+        if (isDisabled) {
+            return;
+        }
+
         selectViewPlugin(pluginId);
         setMainViewContent(null);
     }
@@ -113,7 +135,7 @@ export default () => {
                         >
                             <Tags className="h-4 w-4 " />
                         </button>
-                        <MoreOptions />
+                        {hydrated ? <MoreOptions /> : <div className="ml-auto h-8 w-8" />}
                         {hiddenAside ? (
                             <button
                                 onClick={() => { changeAsideBarKey('plugs'); toggleAside(); }}
@@ -135,11 +157,20 @@ export default () => {
                 ? (
                     <>
                         <div className="flex-1 overflow-auto p-3">
-                            {plugViewMode == 'list'
+                            {!hydrated ? (
+                                <div className="flex h-full min-h-24 items-center justify-center rounded-md border border-dashed border-neutral-200 bg-neutral-50 px-4 text-xs text-neutral-400">
+                                    Loading sidebar settings...
+                                </div>
+                            ) : plugViewMode == 'list'
                                 ? <ItemGroup className="gap-4">
-                                    {handledPlugins.map((plugin) => (
-                                        <Item key={plugin.pluginId} variant="outline" asChild role="listitem" onClick={() => handlePlugSelect(plugin.pluginId)}>
-                                            <div className={`flex items-center cursor-pointer gap-4 relative ${activeViewPluginId == plugin.pluginId ? 'bg-neutral-700 text-white hover:bg-neutral-700!' : 'hover:bg-neutral-200!'}`}>
+                                    {handledPlugins.map((plugin) => {
+                                        const isActive = activeViewPluginId == plugin.pluginId;
+                                        const isDisabled = plugin.status === 'disabled';
+                                        const pluginDisplay = getPluginDisplayState(isDisabled, isActive);
+
+                                        return (
+                                        <Item key={plugin.pluginId} variant="outline" asChild role="listitem" onClick={() => handlePlugSelect(plugin.pluginId, isDisabled)}>
+                                            <div className={`flex items-center gap-4 relative ${pluginDisplay.clickable} ${pluginDisplay.container}`}>
                                                 <ItemMedia variant="image">
                                                     {plugin.manifest.icon ? (
                                                         <img
@@ -148,33 +179,39 @@ export default () => {
                                                             alt={plugin.manifest.name}
                                                             width={32}
                                                             height={32}
-                                                            className="w-full h-full object-cover"
+                                                            className={`w-full h-full object-cover ${pluginDisplay.media}`}
                                                         />
                                                     ) : (
-                                                        <span className={`text-[20px] font-bold  ${activeViewPluginId == plugin.manifest.id ? 'text-white' : 'text-neutral-700'}`}>{plugin.manifest.name?.trim().charAt(0).toUpperCase()}</span>
+                                                        <span className={`text-[20px] font-bold ${isActive ? 'text-white' : 'text-neutral-700'} ${pluginDisplay.media} ${pluginDisplay.title}`}>{plugin.manifest.name?.trim().charAt(0).toUpperCase()}</span>
                                                     )}
                                                 </ItemMedia>
                                                 <ItemContent className="flex-1 min-w-0">
-                                                    <ItemTitle className="block w-full line-clamp-1">
-                                                        {plugin.manifest.name}
+                                                    <ItemTitle className={`w-full line-clamp-1 ${pluginDisplay.title}`}>
+                                                        <span className="truncate">{plugin.manifest.name}</span>
                                                     </ItemTitle>
-                                                    <ItemDescription className={`line-clamp-1 ${activeViewPluginId == plugin.manifest.id && 'text-neutral-300'}`}>{plugin.manifest.description}</ItemDescription>
+                                                    <ItemDescription className={`line-clamp-1 ${isActive && !isDisabled ? 'text-neutral-300' : ''} ${pluginDisplay.description}`}>{plugin.manifest.description}</ItemDescription>
                                                 </ItemContent>
                                                 {/* 增加一个表示状态的小圆点*/}
                                                 <div className={`absolute bottom-2 right-2 w-1.5 h-1.5 rounded-full ${PLUGIN_STATE_MAP[plugin.status]}`} />
                                             </div>
                                         </Item>
-                                    ))}
+                                        )
+                                    })}
                                 </ItemGroup>
                                 : <ItemGroup className={`grid ${plugViewMode == 'grid-medium' ? 'grid-cols-2' : 'grid-cols-3'} gap-3`}>
-                                    {handledPlugins.map((plugin) => (
+                                    {handledPlugins.map((plugin) => {
+                                        const isActive = activeViewPluginId == plugin.pluginId;
+                                        const isDisabled = plugin.status === 'disabled';
+                                        const pluginDisplay = getPluginDisplayState(isDisabled, isActive);
+
+                                        return (
                                         <Item
                                             key={plugin.pluginId}
                                             variant="muted"
                                             // 1. 保持 aspect-square 确保整体是正方形
                                             // 2. 移除 flex gap-1 从根节点，改为在内部需要的地方加，避免影响正方形计算
-                                            className={`relative cursor-pointer aspect-square p-2 ${activeViewPluginId == plugin.manifest.id ? 'bg-neutral-700 text-white' : 'hover:bg-neutral-200'}`}
-                                            onClick={() => handlePlugSelect(plugin.manifest.id)}
+                                            className={`relative aspect-square p-2 ${pluginDisplay.clickable} ${pluginDisplay.container}`}
+                                            onClick={() => handlePlugSelect(plugin.pluginId, isDisabled)}
                                         >
                                             {/* 内部容器：负责垂直排列图片和文字，并居中 */}
                                             <div className="flex flex-col items-center justify-center w-full h-full gap-1">
@@ -184,17 +221,17 @@ export default () => {
                                                         <img
                                                             src={plugin.manifest.icon}
                                                             alt={plugin.manifest.name}
-                                                            className={`max-w-[80%] max-h-[80%] w-auto h-auto object-contain ${plugViewMode !== 'grid-medium' ? 'max-w-[60%] max-h-[60%]' : ''}`}
+                                                            className={`max-w-[80%] max-h-[80%] w-auto h-auto object-contain ${plugViewMode !== 'grid-medium' ? 'max-w-[60%] max-h-[60%]' : ''} ${pluginDisplay.media}`}
                                                         />
                                                     ) : (
-                                                        <span className={`text-2xl font-bold leading-none ${activeViewPluginId == plugin.pluginId ? 'text-white' : 'text-neutral-700'}`}>
+                                                        <span className={`text-2xl font-bold leading-none ${isActive ? 'text-white' : 'text-neutral-700'} ${pluginDisplay.media} ${pluginDisplay.title}`}>
                                                             {plugin.manifest.name?.trim().charAt(0).toUpperCase()}
                                                         </span>
                                                     )}
                                                 </div>
                                                 {/* 文字区域：仅在 grid-medium 显示 */}
                                                 {plugViewMode == 'grid-medium' && (
-                                                    <ItemTitle className="block w-full text-xs text-center line-clamp-1 font-medium">
+                                                    <ItemTitle className={`block w-full text-xs text-center line-clamp-1 font-medium ${pluginDisplay.title}`}>
                                                         {plugin.manifest.name}
                                                     </ItemTitle>
                                                 )}
@@ -202,7 +239,8 @@ export default () => {
                                             {/* 状态点：位置保持不变 */}
                                             <div className={`absolute bottom-2 right-2 w-1.5 h-1.5 rounded-full ${PLUGIN_STATE_MAP[plugin.status]}`} />
                                         </Item>
-                                    ))}
+                                        )
+                                    })}
                                 </ItemGroup>
                             }
                         </div>
@@ -219,27 +257,34 @@ export default () => {
                 )
                 : <>
                     <div className='p-1 w-10 h-full overflow-y-auto [&::-webkit-scrollbar]:hidden scrollbar-width-0'>
-                        {handledPlugins.map((plugin) => (
+                        {hydrated && handledPlugins.map((plugin) => {
+                            const isActive = activeViewPluginId == plugin.pluginId;
+                            const isDisabled = plugin.status === 'disabled';
+                            const pluginDisplay = getPluginDisplayState(isDisabled, isActive);
+
+                            return (
                             <div
                                 key={plugin.pluginId}
-                                className={`flex items-center justify-center relative cursor-pointer mb-1 w-8 h-8 rounded ${activeViewPluginId == plugin.pluginId ? 'bg-neutral-700 text-white' : 'hover:bg-neutral-200'}`}
-                                onClick={() => handlePlugSelect(plugin.pluginId)}
+                                className={`flex items-center justify-center relative mb-1 w-8 h-8 rounded ${pluginDisplay.clickable} ${pluginDisplay.container}`}
+                                onClick={() => handlePlugSelect(plugin.pluginId, isDisabled)}
                             >
                                 {plugin.manifest.icon ? (
                                     <img
                                         src={plugin.manifest.icon}
                                         alt={plugin.manifest.name}
-                                        className='w-6 h-6 object-contain'
+                                        className={`w-6 h-6 object-contain ${pluginDisplay.media}`}
                                     />
                                 ) : (
-                                    <span className={`text-xl font-bold leading-none ${activeViewPluginId == plugin.pluginId ? 'text-white' : 'text-neutral-700'}`}>
+                                    <span className={`text-xl font-bold leading-none ${isActive ? 'text-white' : 'text-neutral-700'} ${pluginDisplay.media} ${pluginDisplay.title}`}>
                                         {plugin.manifest.name?.trim().charAt(0).toUpperCase()}
                                     </span>
                                 )}
+                                {isDisabled && <div className={`pointer-events-none absolute inset-0 rounded border border-dashed ${pluginDisplay.frame}`} />}
                                 <div className={`absolute bottom-0.5 right-0.5 w-1 h-1 rounded-full ${PLUGIN_STATE_MAP[plugin.status]}`} />
                             </div>
 
-                        ))}
+                            )
+                        })}
                     </div>
                     <SettingCenter />
                 </>
@@ -254,6 +299,9 @@ const MoreOptions = () => {
     // 隐藏后台插件（无视图插件）
     const hiddenBackend = useAsideStateStore(it => it.hiddenBackend);
     const changeHiddenBackend = useAsideStateStore(it => it.changeHiddenBackend);
+    // 隐藏已禁用插件
+    const hiddenDisabled = useAsideStateStore(it => it.hiddenDisabled);
+    const changeHiddenDisabled = useAsideStateStore(it => it.changeHiddenDisabled);
     // 插件展示模式
     const plugViewMode = useAsideStateStore(it => it.plugViewMode);
     const changePlugViewMode = useAsideStateStore(it => it.changePlugViewMode);
@@ -324,6 +372,13 @@ const MoreOptions = () => {
                     onCheckedChange={() => changeHiddenBackend()}
                 >
                     Hiden Backend Plugs
+                </DropdownMenuCheckboxItem>
+                <DropdownMenuCheckboxItem
+                    className="cursor-pointer"
+                    checked={hiddenDisabled}
+                    onCheckedChange={() => changeHiddenDisabled()}
+                >
+                    Hide Disabled Plugs
                 </DropdownMenuCheckboxItem>
             </DropdownMenuContent>
         </DropdownMenu>

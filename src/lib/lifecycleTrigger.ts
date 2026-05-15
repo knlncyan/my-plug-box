@@ -3,6 +3,7 @@ type Function = () => Promise<void>;
 class LifecycleTrigger {
     private initFunctions = new Set<Function>();
     private shutdownFunctions = new Set<Function>();
+    private initPromise: Promise<void> | null = null;
 
     register(f: Function, type: 'init' | 'shutdown') {
         if (type == 'init')
@@ -12,9 +13,17 @@ class LifecycleTrigger {
     }
 
     async startInit() {
-        for (const init of this.initFunctions) {
-            await init();
+        if (this.initPromise) {
+            return this.initPromise;
         }
+
+        this.initPromise = (async () => {
+            for (const init of this.initFunctions) {
+                await init();
+            }
+        })();
+
+        return this.initPromise;
     }
 
     async shutdownClose() {

@@ -1,6 +1,6 @@
 {
   "id": "external.airplane-battle",
-  "name": "Airport War",
+  "name": "Airplane Battle",
   "version": "1.0.0",
   "description": "Arcade airplane battle game embedded as an external plugin",
   "icon": "/plugins/external.airplane-battle/icon.svg",
@@ -10,7 +10,7 @@
   ],
   "view": {
     "id": "external.airplane-battle.main",
-    "title": "Airport War",
+    "title": "Airplane Battle",
     "props": {
       "hint": "Press Space or tap to start"
     }
@@ -18,7 +18,7 @@
   "commands": [
     {
       "id": "external.airplane-battle.open",
-      "description": "Open Airport War"
+      "description": "Open Airplane Battle"
     }
   ],
   "moduleUrl": "/plugins/external.airplane-battle/index.js",

@@ -1,4 +1,4 @@
-const STYLE_ID = 'external-airport-war-view-style';
+const STYLE_ID = 'external-airplane-battle-view-style';
 
 function ensureStyles() {
   if (document.getElementById(STYLE_ID)) return;
@@ -54,9 +54,9 @@ export default function AirportWarView(props) {
 
   return h(
     'div',
-    { className: 'airport-war-root' },
+    { className: 'airplane-battle-root' },
     error
-      ? h('div', { className: 'airport-war-error' }, error)
-      : h('div', { className: 'airport-war-shell', ref: hostRef })
+      ? h('div', { className: 'airplane-battle-error' }, error)
+      : h('div', { className: 'airplane-battle-shell', ref: hostRef })
   );
 }

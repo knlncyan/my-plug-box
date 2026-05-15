@@ -4,11 +4,11 @@ import { InputHandler } from './game/input.js';
 
 export function mountAirportWar(rootElement) {
   if (!rootElement) {
-    throw new Error('airport-war root element not found');
+    throw new Error('airplane-battle root element not found');
   }
 
   const canvas = document.createElement('canvas');
-  canvas.className = 'airport-war-canvas';
+  canvas.className = 'airplane-battle-canvas';
   canvas.width = CANVAS_WIDTH;
   canvas.height = CANVAS_HEIGHT;
   rootElement.replaceChildren(canvas);

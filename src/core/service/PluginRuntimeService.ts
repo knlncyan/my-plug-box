@@ -87,7 +87,13 @@ export class PluginRuntimeService {
 
     disablePlugin = async (pluginId: string): Promise<void> => {
         await this.deps.pluginRuntimeCatalogService.disablePlugin(pluginId);
+        await this.deps.commandShortcutService.refresh();
         await this.releasePluginRuntime(pluginId);
+    };
+
+    enablePlugin = async (pluginId: string): Promise<void> => {
+        await this.deps.pluginRuntimeCatalogService.enablePlugin(pluginId);
+        await this.deps.commandShortcutService.refresh();
     };
 
     rescanPlugins = async (): Promise<void> => {

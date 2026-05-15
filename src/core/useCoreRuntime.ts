@@ -8,6 +8,7 @@ export function useCoreRuntime() {
     const css = container.resolve(CommandShortcutService);
 
     const snapshot = useSyncExternalStore(coreRuntime.subscribe, coreRuntime.getSnapshot, coreRuntime.getSnapshot);
+    const shortcutVersion = useSyncExternalStore(css.subscribe, css.getVersion, css.getVersion);
 
     useEffect(() => {
         void coreRuntime.initialize();
@@ -21,10 +22,12 @@ export function useCoreRuntime() {
         activatePlugin: coreRuntime.activatePlugin,
         deactivatePlugin: coreRuntime.deactivatePlugin,
         disablePlugin: coreRuntime.disablePlugin,
+        enablePlugin: coreRuntime.enablePlugin,
         rescanPlugins: coreRuntime.rescanPlugins,
         shutdown: coreRuntime.shutdown,
         // 快捷键服务的方法
         refreshShortcuts: css.refresh,
+        shortcutVersion,
         getCommandsWithShorcut: css.getCommandsWithShortcut,
         registerSystemCommandHander: css.registerSystemCommandHander,
         updateShortcutBinding: css.updateShortcutBinding,

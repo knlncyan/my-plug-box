@@ -68,6 +68,7 @@ pub fn run() {
             commands::activate_plugin,
             commands::deactivate_plugin,
             commands::disable_plugin,
+            commands::enable_plugin,
             // 插件设置、存储管理
             commands::get_all_plugin_settings,
             commands::set_plugin_setting,

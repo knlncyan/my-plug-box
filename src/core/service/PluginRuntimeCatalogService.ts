@@ -58,6 +58,11 @@ export class PluginRuntimeCatalogService {
         await this.refreshNewestState();
     }
 
+    enablePlugin = async (pluginId: string) => {
+        await service.enablePlugin(pluginId);
+        await this.refreshNewestState();
+    }
+
     refreshRuntimeState = async () => {
         await this.ensureExternalManifestsLoaded();
         if (!this.refreshExecutor) {
@@ -109,7 +114,9 @@ export class PluginRuntimeCatalogService {
                 }
                 if (!nextPluginEntryById.has(raw.pluginId)) {
                     nextPluginEntryById.set(raw.pluginId, raw);
-                    raw.commandsMeta.forEach(it => nextCommandById.set(it.id, it));
+                    if (raw.status !== 'disabled') {
+                        raw.commandsMeta.forEach(it => nextCommandById.set(it.id, it));
+                    }
                 }
             } catch (error) {
                 console.warn('[PluginRuntimeCatalog] failed to process plugin manifest', error);

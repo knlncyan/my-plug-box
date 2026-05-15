@@ -18,10 +18,12 @@ interface CommandShortcutServiceDeps {
 export class CommandShortcutService {
     private started = false;
     private commandExecutor: CommandExecutor | null = null;
+    private version = 0;
 
     private readonly systemCommandHandlerMap = new Map<string, Handler>();
     private readonly systemCommandMap = new Map<string, CommandMeta>();
     private readonly pluginCommandMap = new Map<string, CommandMeta>();
+    private readonly listeners = new Set<Handler>();
 
     constructor(private readonly deps: CommandShortcutServiceDeps) { }
 
@@ -39,6 +41,13 @@ export class CommandShortcutService {
     refresh = async () => {
         await this.loadShortcutInfo();
     }
+
+    subscribe = (listener: Handler): (() => void) => {
+        this.listeners.add(listener);
+        return () => this.listeners.delete(listener);
+    }
+
+    getVersion = (): number => this.version;
 
     // 执行器，可以执行系统命令
     executeSystemAndPluginCommand = (id: string) => {
@@ -88,6 +97,7 @@ export class CommandShortcutService {
             if (targetMap.has(result.id)) {
                 targetMap.set(result.id, result);
             }
+            this.bumpVersion();
         }
     }
 
@@ -103,6 +113,7 @@ export class CommandShortcutService {
             if (targetMap.has(result.id)) {
                 targetMap.set(result.id, result);
             }
+            this.bumpVersion();
         }
     }
 
@@ -124,6 +135,14 @@ export class CommandShortcutService {
                 this.pluginCommandMap.set(it.id, it);
             }
         })
+        this.bumpVersion();
+    }
+
+    private bumpVersion() {
+        this.version += 1;
+        for (const listener of this.listeners) {
+            listener();
+        }
     }
 
     private async bindShortcutListener(): Promise<void> {

@@ -43,6 +43,13 @@ class PluginService {
         await api.invokeApi<void>('disable_plugin', { pluginId });
     }
 
+    /**
+     * 启用插件
+     */
+    async enablePlugin(pluginId: string): Promise<void> {
+        await api.invokeApi<void>('enable_plugin', { pluginId });
+    }
+
     async getAllPluginSettings(): Promise<ApiResponse<Record<string, unknown>>> {
         return await api.invokeApi<Record<string, unknown>>('get_all_plugin_settings');
     }

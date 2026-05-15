@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     fs,
     path::{Path, PathBuf},
 };
@@ -101,56 +101,65 @@ impl ShortcutManager {
     }
 
     // 刷新所有已注册的快捷键（command类型的快捷键不刷新，而是主动注册来注入）
-    pub fn refresh_shortcuts(&mut self, app: &AppHandle) {
+    pub fn refresh_shortcuts(&mut self, app: &AppHandle, commands: &[CommandMeta]) -> Result<(), String> {
         let manager = app.global_shortcut();
-        if let Err(error) = manager.unregister_all() {
-            println!("failed to clear shortcuts: {}", error.to_string());
-        }
+        manager
+            .unregister_all()
+            .map_err(|error| format!("failed to clear shortcuts: {}", error))?;
 
         self._shortcut_map.clear();
         self._registered_map.clear();
 
+        let runnable_command_ids = commands
+            .iter()
+            .map(|command| command.id.clone())
+            .collect::<HashSet<_>>();
+
         // 先注册用户的，用户优先级高于其他优先级
-        let user_list = self.register_shortcut(app, PathType::User);
-        let sys_list = self.register_shortcut(app, PathType::System);
+        let user_list = self.register_shortcut(app, PathType::User, Some(&runnable_command_ids))?;
+        let sys_list = self.register_shortcut(app, PathType::System, None)?;
 
         self._shortcut_map.insert(CommandCategory::User, user_list);
         self._shortcut_map.insert(CommandCategory::System, sys_list);
+
+        Ok(())
     }
 
     // 注册命令的快捷键配置
-    pub fn register_commands(&mut self, app: &AppHandle, commands: Vec<CommandMeta>) {
+    pub fn register_commands(&mut self, app: &AppHandle, commands: Vec<CommandMeta>) -> Result<(), String> {
         let manager = app.global_shortcut();
         for cm in &commands {
             if !self._registered_map.contains_key(&cm.id) {
                 if let Some(shortcut_str) = &cm.shortcut {
-                    if let Ok(parsed_shortcut) = shortcut_str.parse::<Shortcut>() {
-                        if !manager.is_registered(parsed_shortcut) {
-                            let cm_for_close = cm.clone();
-                            let _ = manager.on_shortcut(
-                                parsed_shortcut,
-                                move |app, _shortcut, event| {
-                                    if event.state != ShortcutState::Pressed {
-                                        return;
-                                    }
-                                    let _ =
-                                        app.emit(ShortcutManager::EVENT_KEY, cm_for_close.clone());
-                                },
-                            );
-                            self._registered_map.insert(cm.id.clone(), parsed_shortcut);
-                        }
-                    } else {
-                        println!(
-                            "{} convent to hot key failed: {}",
-                            shortcut_str,
-                            shortcut_str.parse::<Shortcut>().unwrap_err()
-                        );
+                    let parsed_shortcut = shortcut_str
+                        .parse::<Shortcut>()
+                        .map_err(|error| format!("{} convent to hot key failed: {}", shortcut_str, error))?;
+
+                    if manager.is_registered(parsed_shortcut) {
+                        return Err(format!("shortcut for command {} is already occupied", cm.id));
                     }
+
+                    let cm_for_close = cm.clone();
+                    manager
+                        .on_shortcut(
+                            parsed_shortcut,
+                            move |app, _shortcut, event| {
+                                if event.state != ShortcutState::Pressed {
+                                    return;
+                                }
+                                let _ =
+                                    app.emit(ShortcutManager::EVENT_KEY, cm_for_close.clone());
+                            },
+                        )
+                        .map_err(|error| format!("failed to register shortcut {}: {}", cm.id, error))?;
+                    self._registered_map.insert(cm.id.clone(), parsed_shortcut);
                 }
             }
         }
         self._shortcut_map
             .insert(CommandCategory::Command, commands);
+
+        Ok(())
     }
 
     // 更新单个快捷键
@@ -162,6 +171,7 @@ impl ShortcutManager {
         let manager = app.global_shortcut();
 
         let mut shortcut_to_register = None;
+        let old_shortcut = self._registered_map.get(&dto.id).cloned();
 
         // 1.拿到具体的命令元数据实体
         let mut cm = self
@@ -174,8 +184,11 @@ impl ShortcutManager {
             let parsed_shortcut = shortcut
                 .parse::<Shortcut>()
                 .map_err(|error| format!("{} convent to hot key failed: {}", shortcut, error))?;
+            if manager.is_registered(parsed_shortcut) && old_shortcut != Some(parsed_shortcut) {
+                return Err(format!("Command {} shortcut is occupied", dto.id));
+            }
             // 2.2 记录新的快捷键
-            if !manager.is_registered(parsed_shortcut) {
+            if old_shortcut != Some(parsed_shortcut) {
                 shortcut_to_register = Some(parsed_shortcut);
                 cm.shortcut = Some(shortcut.clone());
             }
@@ -203,14 +216,29 @@ impl ShortcutManager {
             }
             // 4.2注册新的快捷键
             let cm_for_close = cm.clone();
-            manager
+            if let Err(error) = manager
                 .on_shortcut(need_register_shortcut, move |app, _shortcut, event| {
                     if event.state != ShortcutState::Pressed {
                         return;
                     }
                     let _ = app.emit(ShortcutManager::EVENT_KEY, cm_for_close.clone());
                 })
-                .map_err(|e| format!("Failed to register new shortcut: {}", e))?;
+                .map_err(|e| format!("Failed to register new shortcut: {}", e)) {
+                if let Some(previous_shortcut) = old_shortcut {
+                    let previous_cm = cm.clone();
+                    manager
+                        .on_shortcut(previous_shortcut, move |app, _shortcut, event| {
+                            if event.state != ShortcutState::Pressed {
+                                return;
+                            }
+                            let _ = app.emit(ShortcutManager::EVENT_KEY, previous_cm.clone());
+                        })
+                        .map_err(|rollback_error| format!("{}; rollback failed: {}", error, rollback_error))?;
+                    self._registered_map.insert(dto.id.clone(), previous_shortcut);
+                }
+
+                return Err(error);
+            }
             self._registered_map
                 .insert(dto.id.clone(), need_register_shortcut);
         }
@@ -304,43 +332,51 @@ impl ShortcutManager {
     }
 
     // 辅助方法：从文件中注册快捷键
-    fn register_shortcut(&mut self, app: &AppHandle, file_type: PathType) -> Vec<CommandMeta> {
+    fn register_shortcut(
+        &mut self,
+        app: &AppHandle,
+        file_type: PathType,
+        runnable_command_ids: Option<&HashSet<String>>,
+    ) -> Result<Vec<CommandMeta>, String> {
         let manager = app.global_shortcut();
         let file_path = get_file_path(app, &file_type);
 
-        let Ok(shortcuts) = file_path.and_then(|path| read_shortcut_file(&path)) else {
-            return Vec::new();
+        let shortcuts = file_path.and_then(|path| read_shortcut_file(&path))?;
+
+        let shortcuts = match file_type {
+            PathType::User => filter_user_shortcuts(shortcuts, runnable_command_ids),
+            PathType::System => shortcuts,
         };
 
         for cm in &shortcuts {
             if !self._registered_map.contains_key(&cm.id) {
                 if let Some(shortcut_str) = &cm.shortcut {
-                    if let Ok(parsed_shortcut) = shortcut_str.parse::<Shortcut>() {
-                        if !manager.is_registered(parsed_shortcut) {
-                            let cm_for_close = cm.clone();
-                            let _ = manager.on_shortcut(
-                                parsed_shortcut,
-                                move |app, _shortcut, event| {
-                                    if event.state != ShortcutState::Pressed {
-                                        return;
-                                    }
-                                    let _ =
-                                        app.emit(ShortcutManager::EVENT_KEY, cm_for_close.clone());
-                                },
-                            );
-                            self._registered_map.insert(cm.id.clone(), parsed_shortcut);
-                        }
-                    } else {
-                        println!(
-                            "{} convert to hot key failed: {}",
-                            shortcut_str,
-                            shortcut_str.parse::<Shortcut>().unwrap_err()
-                        );
+                    let parsed_shortcut = shortcut_str
+                        .parse::<Shortcut>()
+                        .map_err(|error| format!("{} convert to hot key failed: {}", shortcut_str, error))?;
+
+                    if manager.is_registered(parsed_shortcut) {
+                        return Err(format!("shortcut for command {} is already occupied", cm.id));
                     }
+
+                    let cm_for_close = cm.clone();
+                    manager
+                        .on_shortcut(
+                            parsed_shortcut,
+                            move |app, _shortcut, event| {
+                                if event.state != ShortcutState::Pressed {
+                                    return;
+                                }
+                                let _ =
+                                    app.emit(ShortcutManager::EVENT_KEY, cm_for_close.clone());
+                            },
+                        )
+                        .map_err(|error| format!("failed to register shortcut {}: {}", cm.id, error))?;
+                    self._registered_map.insert(cm.id.clone(), parsed_shortcut);
                 }
             }
         }
-        shortcuts
+        Ok(shortcuts)
     }
 
     // 辅助方法：根据 ID 查找对应的 CommandShortcut
@@ -382,5 +418,58 @@ impl ShortcutManager {
 
         // 3.持久化
         write_shortcut_file(app, list)
+    }
+}
+
+fn filter_user_shortcuts(
+    shortcuts: Vec<CommandMeta>,
+    runnable_command_ids: Option<&HashSet<String>>,
+) -> Vec<CommandMeta> {
+    let Some(runnable_command_ids) = runnable_command_ids else {
+        return shortcuts;
+    };
+
+    shortcuts
+        .into_iter()
+        .filter(|shortcut| {
+            if shortcut.plugin_id == "system" {
+                return true;
+            }
+
+            runnable_command_ids.contains(&shortcut.id)
+        })
+        .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{filter_user_shortcuts, CommandMeta};
+    use std::collections::HashSet;
+
+    fn make_shortcut(id: &str, plugin_id: &str) -> CommandMeta {
+        CommandMeta {
+            id: id.to_string(),
+            description: format!("{} description", id),
+            plugin_id: plugin_id.to_string(),
+            shortcut: Some("Ctrl+K".to_string()),
+            shortcut_scope: Some("local".to_string()),
+        }
+    }
+
+    #[test]
+    fn user_shortcuts_for_disabled_plugin_commands_are_filtered_out() {
+        let shortcuts = vec![
+            make_shortcut("system-command-pattern.open", "system"),
+            make_shortcut("external.enabled.open", "external.enabled"),
+            make_shortcut("external.disabled.open", "external.disabled"),
+        ];
+        let runnable_command_ids = HashSet::from(["external.enabled.open".to_string()]);
+
+        let filtered = filter_user_shortcuts(shortcuts, Some(&runnable_command_ids));
+
+        assert_eq!(filtered.len(), 2);
+        assert!(filtered.iter().any(|shortcut| shortcut.id == "system-command-pattern.open"));
+        assert!(filtered.iter().any(|shortcut| shortcut.id == "external.enabled.open"));
+        assert!(!filtered.iter().any(|shortcut| shortcut.id == "external.disabled.open"));
     }
 }

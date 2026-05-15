@@ -6,7 +6,7 @@ import EditShortcutDialog, { useEditShortcutDialog } from './EditShortcutDialog'
 import { CommandMeta } from '@/domain/protocol';
 
 export default function KeyboardShortcutsPage() {
-    const { getCommandsWithShorcut } = useCoreRuntime();
+    const { getCommandsWithShorcut, shortcutVersion } = useCoreRuntime();
     const [query, setQuery] = useState('');
     const [refreshKey, setRefreshKey] = useState(0);
 
@@ -20,7 +20,7 @@ export default function KeyboardShortcutsPage() {
         });
 
         return systemList.concat(pluginList);
-    }, [refreshKey]);
+    }, [refreshKey, shortcutVersion]);
 
     const filteredCommands = useMemo(() => {
         const keyword = query.trim().toLowerCase();

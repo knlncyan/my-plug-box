@@ -58,16 +58,16 @@ export default () => {
 
     return (
         <div
-            className="flex h-8 w-full items-center bg-neutral-150"
+            className="topbar-surface flex h-8 w-full items-center"
             style={{ WebkitAppRegion: 'drag' } as CSSProperties}
         >
             {/* 窗口标题（可选） */}
             <button
                 onClick={backhome}
-                className="flex px-2 h-8 items-center justify-center rounded hover:bg-black/5"
+                className="topbar-interactive flex h-8 items-center justify-center rounded px-2"
             >
-                <img src="src/assets/tauri.svg" className="w-5 h-5" />
-                <span className="ml-2 text-sm font-medium">ModuDesk</span>
+                <img src="src/assets/icon.svg" className="w-5 h-5" />
+                <span className="ml-2 text-sm font-[500] uppercase tracking-[0.12em]">ModuDesk</span>
             </button>
 
 
@@ -79,14 +79,14 @@ export default () => {
                 {/* 最小化到托盘 */}
                 <button
                     onClick={minimizeToTray}
-                    className="flex h-8 w-8 items-center justify-center rounded hover:bg-black/10"
+                    className="topbar-interactive flex h-8 w-8 items-center justify-center rounded"
                 >
                     <ChevronDown className="h-3.5 w-3.5 " />
                 </button>
                 {/* 最小化 */}
                 <button
                     onClick={minimize}
-                    className="flex h-8 w-8 items-center justify-center rounded hover:bg-black/10"
+                    className="topbar-interactive flex h-8 w-8 items-center justify-center rounded"
                 >
                     <Minus className="h-3.5 w-3.5 " />
                 </button>
@@ -94,15 +94,15 @@ export default () => {
                 {/* 最大化/还原 */}
                 <button
                     onClick={toggleMaximize}
-                    className="flex h-8 w-8 items-center justify-center rounded hover:bg-black/10"
+                    className="topbar-interactive flex h-8 w-8 items-center justify-center rounded"
                 >
-                    <Copy className="h-3 w-3 text-neutral-950 scale-x-[-1]" />
+                    <Copy className="h-3 w-3 scale-x-[-1]" />
                 </button>
 
                 {/* 关闭 */}
                 <button
                     onClick={closeApp}
-                    className="flex h-8 w-8 items-center justify-center rounded hover:bg-red-400"
+                    className="topbar-interactive topbar-close flex h-8 w-8 items-center justify-center rounded"
                 >
                     <X className="h-4 w-4 " />
                 </button>

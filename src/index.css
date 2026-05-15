@@ -46,6 +46,12 @@
   --theme-neutral-850: #1f1f1f;
   --theme-neutral-900: #171717;
   --theme-neutral-950: #0a0a0a;
+  --topbar-gradient-start: #edf2f8;
+  --topbar-gradient-middle: #e2e9f1;
+  --topbar-gradient-end: #dfe7f0;
+  --topbar-foreground: #24303d;
+  --topbar-hover: rgb(15 23 42 / 0.08);
+  --topbar-close-hover: #e36d6a;
   --radius: 0.625rem;
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
@@ -231,5 +237,31 @@
 
   body {
     @apply bg-background text-foreground;
+  }
+}
+
+@layer components {
+  .topbar-surface {
+    background-image: linear-gradient(
+      90deg,
+      var(--topbar-gradient-start) 0%,
+      var(--topbar-gradient-middle) 52%,
+      var(--topbar-gradient-end) 100%
+    );
+    color: var(--topbar-foreground);
+  }
+
+  .topbar-interactive {
+    color: inherit;
+    transition: background-color 160ms ease, color 160ms ease;
+  }
+
+  .topbar-interactive:hover {
+    background-color: var(--topbar-hover);
+  }
+
+  .topbar-close:hover {
+    background-color: var(--topbar-close-hover);
+    color: var(--theme-neutral-50);
   }
 }
